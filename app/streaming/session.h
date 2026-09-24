@@ -10,6 +10,7 @@
 #include "video/decoder.h"
 #include "audio/renderers/renderer.h"
 #include "video/overlaymanager.h"
+#include "streamhealth.h"
 
 class SupportedVideoFormatList : public QList<int>
 {
@@ -121,6 +122,11 @@ public:
         return m_OverlayManager;
     }
 
+    StreamHealthMonitor* getStreamHealthMonitor()
+    {
+        return m_StreamHealthMonitor;
+    }
+
     void flushWindowEvents();
 
     void setShouldExit(bool quitHostApp = false);
@@ -148,11 +154,15 @@ private:
 
     bool startConnectionAsync();
 
+    int predictNegotiatedVideoFormat();
+
     bool validateLaunch(SDL_Window* testWindow);
 
     void emitLaunchWarning(QString text);
 
     bool populateDecoderProperties(SDL_Window* window);
+
+    void snapshotPresentationSettings(SDL_Window* window);
 
     IAudioRenderer* createAudioRenderer(const POPUS_MULTISTREAM_CONFIGURATION opusConfig);
 
@@ -161,6 +171,10 @@ private:
     bool testAudio(int audioConfiguration);
 
     int getAudioRendererCapabilities(int audioConfiguration);
+
+    int getStreamDisplayIndex();
+
+    void overrideStreamConfigForClientDisplay(SDL_Window* testWindow);
 
     void getWindowDimensions(int& x, int& y,
                              int& width, int& height);
@@ -187,8 +201,10 @@ private:
                        StreamingPreferences::RendererSelection renderer,
                        SDL_Window* window, int videoFormat, int width, int height,
                        int frameRate, bool enableVsync, bool enableFramePacing,
-                       bool testOnly,
-                       IVideoDecoder*& chosenDecoder);
+                       bool testOnly, IVideoDecoder*& chosenDecoder,
+                       bool enableVrr = false, int vrrDisplayRefreshHz = 0,
+                       bool* effectiveVrr = nullptr,
+                       bool autoFramePacing = false);
 
     static
     void clStageStarting(int stage);
@@ -243,7 +259,16 @@ private:
     static
     int drSubmitDecodeUnit(PDECODE_UNIT du);
 
+    // VRR qualification is decided once at session start. The refresh rate is
+    // baked into the renderer's immutable presentation mode, so it must not be
+    // re-derived from a mutable settings object mid-stream.
+    struct PresentationSettings {
+        bool enableVrr = false;
+        int refreshRate = 0;
+    };
+
     StreamingPreferences* m_Preferences;
+    PresentationSettings m_PresentationSettings;
     bool m_IsFullScreen;
     SupportedVideoFormatList m_SupportedVideoFormats; // Sorted in order of descending priority
     STREAM_CONFIGURATION m_StreamConfig;
@@ -282,7 +307,16 @@ private:
 
     Overlay::OverlayManager m_OverlayManager;
 
+    StreamHealthMonitor* m_StreamHealthMonitor;
+
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;
     static QSemaphore s_ActiveSessionSemaphore;
+
+    // Decoder resolution limit recorded by getDecoderInfo(). Empty if the
+    // decoder reported no limit. The probed flag distinguishes that from
+    // getDecoderInfo() never having run, which is the case when streaming
+    // from the command line.
+    static QSize s_DecoderMaxResolution;
+    static bool s_DecoderMaxResolutionProbed;
 };

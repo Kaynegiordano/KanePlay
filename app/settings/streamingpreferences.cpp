@@ -1,24 +1,41 @@
 #include "streamingpreferences.h"
 #include "utils.h"
+#include "streaming/vrrratepolicy.h"
+
+#include <Limelight.h>
 
 #include <QSettings>
 #include <QTranslator>
 #include <QCoreApplication>
 #include <QLocale>
 #include <QReadWriteLock>
+#include <QVariantMap>
 #include <QtMath>
 
 #include <QtDebug>
+
+#include <algorithm>
+#include <map>
+#include <vector>
 
 #define SER_STREAMSETTINGS "streamsettings"
 #define SER_WIDTH "width"
 #define SER_HEIGHT "height"
 #define SER_FPS "fps"
+#define SER_AUTORESOLUTION "autoresolution"
+#define SER_AUTOFPS "autofps"
 #define SER_BITRATE "bitrate"
+#define SER_WIFI_BITRATE "wifibitrate"
+#define SER_USE_WIFI_BITRATE "usewifibitrate"
 #define SER_UNLOCK_BITRATE "unlockbitrate"
 #define SER_AUTOADJUSTBITRATE "autoadjustbitrate"
+#define SER_LEARNBITRATE "learnbitrate"
+#define SER_AUTOFRAMEPACING "autoframepacing"
+#define SER_LEARNEDBITRATES "learnedbitrates"
+#define SER_LOGSTREAMSTATS "logstreamstats"
 #define SER_FULLSCREEN "fullscreen"
 #define SER_VSYNC "vsync"
+#define SER_ENABLEVRR "enablevrr"
 #define SER_GAMEOPTS "gameopts"
 #define SER_HOSTAUDIO "hostaudio"
 #define SER_MULTICONT "multicontroller"
@@ -125,11 +142,19 @@ void StreamingPreferences::reload()
     width = settings.value(SER_WIDTH, 1280).toInt();
     height = settings.value(SER_HEIGHT, 720).toInt();
     fps = settings.value(SER_FPS, 60).toInt();
+    autoResolution = settings.value(SER_AUTORESOLUTION, false).toBool();
+    autoFps = settings.value(SER_AUTOFPS, false).toBool();
     enableYUV444 = settings.value(SER_YUV444, false).toBool();
     bitrateKbps = settings.value(SER_BITRATE, getDefaultBitrate(width, height, fps, enableYUV444)).toInt();
+    wifiBitrateKbps = settings.value(SER_WIFI_BITRATE, qMin(bitrateKbps, 20000)).toInt();
+    useWifiBitrate = settings.value(SER_USE_WIFI_BITRATE, false).toBool();
     unlockBitrate = settings.value(SER_UNLOCK_BITRATE, false).toBool();
     autoAdjustBitrate = settings.value(SER_AUTOADJUSTBITRATE, true).toBool();
+    learnBitrate = settings.value(SER_LEARNBITRATE, true).toBool();
+    autoFramePacing = settings.value(SER_AUTOFRAMEPACING, true).toBool();
+    logStreamStats = settings.value(SER_LOGSTREAMSTATS, false).toBool();
     enableVsync = settings.value(SER_VSYNC, true).toBool();
+    enableVrr = settings.value(SER_ENABLEVRR, false).toBool();
     gameOptimizations = settings.value(SER_GAMEOPTS, true).toBool();
     playAudioOnHost = settings.value(SER_HOSTAUDIO, false).toBool();
     multiController = settings.value(SER_MULTICONT, true).toBool();
@@ -137,7 +162,9 @@ void StreamingPreferences::reload()
     quitAppAfter = settings.value(SER_QUITAPPAFTER, false).toBool();
     absoluteMouseMode = settings.value(SER_ABSMOUSEMODE, false).toBool();
     absoluteTouchMode = settings.value(SER_ABSTOUCHMODE, true).toBool();
-    framePacing = settings.value(SER_FRAMEPACING, false).toBool();
+    // Frame pacing only kicks in when frames arrive irregularly (see autoFramePacing),
+    // so it is cheap enough to leave on by default.
+    framePacing = settings.value(SER_FRAMEPACING, true).toBool();
     connectionWarnings = settings.value(SER_CONNWARNINGS, true).toBool();
     configurationWarnings = settings.value(SER_CONFWARNINGS, true).toBool();
     richPresence = settings.value(SER_RICHPRESENCE, true).toBool();
@@ -326,10 +353,18 @@ void StreamingPreferences::save()
     settings.setValue(SER_WIDTH, width);
     settings.setValue(SER_HEIGHT, height);
     settings.setValue(SER_FPS, fps);
+    settings.setValue(SER_AUTORESOLUTION, autoResolution);
+    settings.setValue(SER_AUTOFPS, autoFps);
     settings.setValue(SER_BITRATE, bitrateKbps);
+    settings.setValue(SER_WIFI_BITRATE, wifiBitrateKbps);
+    settings.setValue(SER_USE_WIFI_BITRATE, useWifiBitrate);
     settings.setValue(SER_UNLOCK_BITRATE, unlockBitrate);
     settings.setValue(SER_AUTOADJUSTBITRATE, autoAdjustBitrate);
+    settings.setValue(SER_LEARNBITRATE, learnBitrate);
+    settings.setValue(SER_AUTOFRAMEPACING, autoFramePacing);
+    settings.setValue(SER_LOGSTREAMSTATS, logStreamStats);
     settings.setValue(SER_VSYNC, enableVsync);
+    settings.setValue(SER_ENABLEVRR, enableVrr);
     settings.setValue(SER_GAMEOPTS, gameOptimizations);
     settings.setValue(SER_HOSTAUDIO, playAudioOnHost);
     settings.setValue(SER_MULTICONT, multiController);
@@ -362,6 +397,70 @@ void StreamingPreferences::save()
     settings.setValue(SER_SWAPFACEBUTTONS, swapFaceButtons);
     settings.setValue(SER_CAPTURESYSKEYS, captureSysKeysMode);
     settings.setValue(SER_KEEPAWAKE, keepAwake);
+}
+
+// Ceiling of the bitrate slider on the settings page
+int StreamingPreferences::getMaxBitrate(bool unlockBitrate)
+{
+    return unlockBitrate ? 500000 : 150000;
+}
+
+QVariantList StreamingPreferences::getFpsChoices(const QVariantList& refreshRates) const
+{
+    const bool vrrEnabled = enableVsync && enableVrr;
+
+    std::vector<int> rates;
+    rates.reserve(refreshRates.size());
+    for (const QVariant& value : refreshRates) {
+        bool ok = false;
+        const int refreshHz = value.toInt(&ok);
+        if (ok && refreshHz > 1) {
+            rates.push_back(refreshHz);
+        }
+    }
+
+    // Sorted by rate, and the first semantic role for a duplicate rate wins so
+    // a baseline choice is never relabeled by a coincident calculated rate.
+    std::map<int, QString> choices;
+    auto addChoice = [&choices](int rate, const char* kind) {
+        if (rate > 0) {
+            choices.emplace(rate, QLatin1String(kind));
+        }
+    };
+
+    // Always useful streaming rates, including on a 60 Hz display.
+    addChoice(30, "fixed");
+    addChoice(60, "fixed");
+
+    for (const int refreshHz : rates) {
+        if (vrrEnabled) {
+            // Exact native rates are deliberately omitted while VRR is on:
+            // they leave no adaptive-refresh headroom.
+            addChoice(VrrRatePolicy::vrrRateForRefresh(refreshHz), "vrr");
+            addChoice(VrrRatePolicy::lowLatencyRateForRefresh(refreshHz), "low-latency-vrr");
+        }
+        else {
+            addChoice(refreshHz, "fixed");
+        }
+    }
+
+    // A manually saved value must remain selectable, but a native rate is not
+    // reintroduced that way while VRR is enabled.
+    if (fps > 0 && (!vrrEnabled ||
+                    std::find(rates.cbegin(), rates.cend(), fps) == rates.cend())) {
+        addChoice(fps, "custom");
+    }
+
+    QVariantList result;
+    for (const auto& choice : choices) {
+        QVariantMap item;
+        item.insert("video_fps", QString::number(choice.first));
+        item.insert("is_custom", choice.second == QLatin1String("custom"));
+        item.insert("kind", choice.second);
+        result.append(item);
+    }
+
+    return result;
 }
 
 int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool yuv444)
@@ -418,4 +517,47 @@ int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool
     }
 
     return qRound(resolutionFactor * frameRateFactor) * 1000;
+}
+
+double StreamingPreferences::getLearnedBitrateFactor(const QString& key)
+{
+    QSettings settings;
+    settings.beginGroup(SER_LEARNEDBITRATES);
+    return qBound(0.1, settings.value(key, 1.0).toDouble(), 1.0);
+}
+
+void StreamingPreferences::setLearnedBitrateFactor(const QString& key, double factor)
+{
+    QSettings settings;
+    settings.beginGroup(SER_LEARNEDBITRATES);
+    if (factor >= 1.0) {
+        settings.remove(key);
+    }
+    else {
+        settings.setValue(key, factor);
+    }
+}
+
+void StreamingPreferences::resetLearnedBitrates()
+{
+    QSettings settings;
+    settings.remove(SER_LEARNEDBITRATES);
+}
+
+int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool yuv444, int videoFormat)
+{
+    // The table above was tuned for H.264. Newer codecs reach the same quality with
+    // less data, so we don't need to spend as much bandwidth on them. These factors
+    // are conservative for low-latency hardware encoders (P1-P4 class presets).
+    float codecFactor = 1.0f;
+    if (videoFormat & VIDEO_FORMAT_MASK_AV1) {
+        codecFactor = 0.65f;
+    }
+    else if (videoFormat & VIDEO_FORMAT_MASK_H265) {
+        codecFactor = 0.75f;
+    }
+
+    // Round to 0.5 Mbps steps, like the bitrate slider
+    int bitrateKbps = qRound(getDefaultBitrate(width, height, fps, yuv444) * codecFactor / 500.f) * 500;
+    return qMax(bitrateKbps, 500);
 }

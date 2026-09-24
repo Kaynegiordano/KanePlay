@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QRect>
 #include <QQmlEngine>
+#include <QVariantList>
 
 class StreamingPreferences : public QObject
 {
@@ -14,7 +15,21 @@ public:
     Q_INVOKABLE static int
     getDefaultBitrate(int width, int height, int fps, bool yuv444);
 
+    Q_INVOKABLE static int
+    getMaxBitrate(bool unlockBitrate);
+    // Same as above, scaled for the compression efficiency of the given VIDEO_FORMAT_* codec
+    static int
+    getDefaultBitrate(int width, int height, int fps, bool yuv444, int videoFormat);
+
     Q_INVOKABLE void save();
+
+    // Share of the configured bitrate that proved sustainable on a given host and
+    // network (1.0 when nothing was learned yet). See StreamHealthMonitor.
+    static double getLearnedBitrateFactor(const QString& key);
+    static void setLearnedBitrateFactor(const QString& key, double factor);
+
+    // Forget the bitrates learned for each host
+    Q_INVOKABLE static void resetLearnedBitrates();
 
     void reload();
 
@@ -122,10 +137,18 @@ public:
     Q_PROPERTY(int width MEMBER width NOTIFY displayModeChanged)
     Q_PROPERTY(int height MEMBER height NOTIFY displayModeChanged)
     Q_PROPERTY(int fps MEMBER fps NOTIFY displayModeChanged)
+    Q_PROPERTY(bool autoResolution MEMBER autoResolution NOTIFY displayModeChanged)
+    Q_PROPERTY(bool autoFps MEMBER autoFps NOTIFY displayModeChanged)
     Q_PROPERTY(int bitrateKbps MEMBER bitrateKbps NOTIFY bitrateChanged)
+    Q_PROPERTY(int wifiBitrateKbps MEMBER wifiBitrateKbps NOTIFY wifiBitrateChanged)
+    Q_PROPERTY(bool useWifiBitrate MEMBER useWifiBitrate NOTIFY useWifiBitrateChanged)
     Q_PROPERTY(bool unlockBitrate MEMBER unlockBitrate NOTIFY unlockBitrateChanged)
     Q_PROPERTY(bool autoAdjustBitrate MEMBER autoAdjustBitrate NOTIFY autoAdjustBitrateChanged)
+    Q_PROPERTY(bool learnBitrate MEMBER learnBitrate NOTIFY learnBitrateChanged)
+    Q_PROPERTY(bool autoFramePacing MEMBER autoFramePacing NOTIFY framePacingChanged)
+    Q_PROPERTY(bool logStreamStats MEMBER logStreamStats NOTIFY logStreamStatsChanged)
     Q_PROPERTY(bool enableVsync MEMBER enableVsync NOTIFY enableVsyncChanged)
+    Q_PROPERTY(bool enableVrr MEMBER enableVrr NOTIFY enableVrrChanged)
     Q_PROPERTY(bool gameOptimizations MEMBER gameOptimizations NOTIFY gameOptimizationsChanged)
     Q_PROPERTY(bool playAudioOnHost MEMBER playAudioOnHost NOTIFY playAudioOnHostChanged)
     Q_PROPERTY(bool multiController MEMBER multiController NOTIFY multiControllerChanged)
@@ -160,14 +183,29 @@ public:
 
     Q_INVOKABLE bool retranslate();
 
+    // Rate choices are advisory; toggling VRR never rewrites the saved FPS
+    // preference.
+    Q_INVOKABLE QVariantList getFpsChoices(const QVariantList& refreshRates) const;
+
     // Directly accessible members for preferences
     int width;
     int height;
     int fps;
+    // When set, width/height and/or fps are overridden at stream start with the
+    // native mode of the display that the stream will be shown on. The saved
+    // width/height/fps values are used as a fallback if detection fails.
+    bool autoResolution;
+    bool autoFps;
     int bitrateKbps;
+    int wifiBitrateKbps;
+    bool useWifiBitrate;
     bool unlockBitrate;
     bool autoAdjustBitrate;
+    bool learnBitrate;
+    bool autoFramePacing;
+    bool logStreamStats;
     bool enableVsync;
+    bool enableVrr;
     bool gameOptimizations;
     bool playAudioOnHost;
     bool multiController;
@@ -204,9 +242,14 @@ public:
 signals:
     void displayModeChanged();
     void bitrateChanged();
+    void wifiBitrateChanged();
+    void useWifiBitrateChanged();
     void unlockBitrateChanged();
     void autoAdjustBitrateChanged();
+    void learnBitrateChanged();
+    void logStreamStatsChanged();
     void enableVsyncChanged();
+    void enableVrrChanged();
     void gameOptimizationsChanged();
     void playAudioOnHostChanged();
     void multiControllerChanged();
@@ -246,4 +289,3 @@ private:
 
     QQmlEngine* m_QmlEngine;
 };
-

@@ -1,5 +1,8 @@
 #include "pacer.h"
+#include "vrrpacingworker.h"
+#include "../ivrrframepresenter.h"
 #include "streaming/streamutils.h"
+#include "streaming/vrrratepolicy.h"
 
 #ifdef Q_OS_WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -12,6 +15,8 @@
 #endif
 
 #include <SDL_syswm.h>
+
+#include <utility>
 
 // Limit the number of queued frames to prevent excessive memory consumption
 // if the V-Sync source or renderer is blocked for a while. It's important
@@ -29,6 +34,15 @@ static_assert(PACER_MAX_OUTSTANDING_FRAMES == MAX_QUEUED_FRAMES + 2,
 // V-sync happens.
 #define TIMER_SLACK_MS 3
 
+// Auto pacing looks at how far apart frames arrive compared to the stream frame
+// period, averaged over ~1 second windows. Network jitter bunches frames up, which
+// shows up as stutter unless we pace them out on V-sync.
+#define AUTO_PACING_WINDOW_US 1000000
+#define AUTO_PACING_ENABLE_JITTER 0.25      // Mean deviation above 25% of a frame period is visible
+#define AUTO_PACING_DISABLE_JITTER 0.12
+#define AUTO_PACING_ENABLE_WINDOWS 2        // React quickly when stutter starts...
+#define AUTO_PACING_DISABLE_WINDOWS 15      // ...but only give up pacing once things are clearly stable
+
 Pacer::Pacer(IFFmpegRenderer* renderer, PVIDEO_STATS videoStats) :
     m_RenderThread(nullptr),
     m_VsyncThread(nullptr),
@@ -38,13 +52,29 @@ Pacer::Pacer(IFFmpegRenderer* renderer, PVIDEO_STATS videoStats) :
     m_VsyncRenderer(renderer),
     m_MaxVideoFps(0),
     m_DisplayFps(0),
-    m_VideoStats(videoStats)
+    m_VideoStats(videoStats),
+    m_RendererAttributes(0),
+    m_AutoPacing(false),
+    m_PacingActive(true),
+    m_LastFrameArrivalUs(0),
+    m_JitterWindowStartUs(0),
+    m_JitterSumUs(0),
+    m_JitterSamples(0),
+    m_IrregularWindows(0),
+    m_RegularWindows(0)
 {
 
 }
 
 Pacer::~Pacer()
 {
+    if (m_VrrWorker != nullptr) {
+        // The VRR worker owns the renderer context and releases it from its
+        // own thread after cancelling any prepared frame.
+        m_VrrWorker.reset();
+        return;
+    }
+
     m_Stopping = true;
 
     // Stop the V-sync thread
@@ -83,6 +113,10 @@ Pacer::~Pacer()
 
 void Pacer::renderOnMainThread()
 {
+    if (m_VrrWorker != nullptr) {
+        return;
+    }
+
     // Ignore this call for renderers that work on a dedicated render thread
     if (m_RenderThread != nullptr) {
         return;
@@ -259,11 +293,88 @@ void Pacer::handleVsync(int timeUntilNextVsyncMillis)
     enqueueFrameForRenderingAndUnlock(m_PacingQueue.dequeue());
 }
 
-bool Pacer::initialize(SDL_Window* window, int maxVideoFps, bool enablePacing)
+bool Pacer::initialize(SDL_Window* window, int maxVideoFps,
+                       bool enablePacing, bool enableVsync,
+                       bool enableVrr, int vrrDisplayRefreshHz,
+                       bool autoPacing)
 {
     m_MaxVideoFps = maxVideoFps;
-    m_DisplayFps = StreamUtils::getDisplayRefreshRate(window);
     m_RendererAttributes = m_VsyncRenderer->getRendererAttributes();
+
+    // VRR is deliberately a third pacing mode. It is selected once, before
+    // any legacy V-sync source or render thread can be created, and every
+    // rejection continues through the original fixed path below.
+    if (enableVrr) {
+        VrrSessionConfig config;
+        VrrFallbackReason fallbackReason = VrrFallbackReason::NoFallback;
+        config.streamRateHz = maxVideoFps;
+        config.displayRefreshHz = vrrDisplayRefreshHz;
+
+        if (!enableVsync) {
+            fallbackReason = VrrFallbackReason::IneffectiveVsync;
+        }
+        else if (config.displayRefreshHz <= 0) {
+            fallbackReason = VrrFallbackReason::InvalidRefresh;
+        }
+        else if (!VrrRatePolicy::hasAdaptiveHeadroom(config.streamRateHz,
+                                                     config.displayRefreshHz)) {
+            fallbackReason = VrrFallbackReason::InsufficientHeadroom;
+            IVrrFramePresenter* presenter =
+                m_VsyncRenderer->getVrrFramePresenter();
+            if (presenter != nullptr &&
+                    presenter->checkSupport() == VrrFallbackReason::NoFallback &&
+                    !presenter->restoreFixedPresentation(fallbackReason)) {
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                             "VRR pacing lacks adaptive-refresh headroom and the presenter cannot restore fixed presentation");
+                return false;
+            }
+        }
+        else {
+            IVrrFramePresenter* presenter =
+                m_VsyncRenderer->getVrrFramePresenter();
+            if (presenter == nullptr) {
+                fallbackReason = VrrFallbackReason::UnsupportedRenderer;
+            }
+            else {
+                fallbackReason = presenter->checkSupport();
+                if (fallbackReason == VrrFallbackReason::NoFallback) {
+                    m_VrrWorker = std::make_unique<VrrPacingWorker>(
+                        presenter, config, m_VideoStats);
+                    if (m_VrrWorker->start()) {
+                        m_DisplayFps = config.displayRefreshHz;
+                        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                                    "VRR pacing: target %d Hz with %d FPS stream",
+                                    m_DisplayFps, m_MaxVideoFps);
+                        return true;
+                    }
+
+                    fallbackReason = VrrFallbackReason::InitializationFailed;
+                    if (!presenter->restoreFixedPresentation(fallbackReason)) {
+                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                     "VRR pacing worker failed to start and the presenter cannot restore fixed presentation");
+                        m_VrrWorker.reset();
+                        return false;
+                    }
+
+                    m_VrrWorker.reset();
+                }
+            }
+        }
+
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "VRR pacing unavailable: %s; falling back to fixed V-sync pacing",
+                    vrrFallbackReasonName(fallbackReason));
+
+        // VRR requires V-sync at the session boundary, so its rejection still
+        // has a valid fixed-pacing fallback even if the user did not select
+        // the older frame-pacing checkbox.
+        enablePacing = enablePacing || enableVsync;
+    }
+
+    // The VRR success path uses its strict session refresh snapshot and
+    // returned above. Keep the legacy fallback query out of that path so it
+    // cannot invent a 60 Hz value or produce an unrelated warning.
+    m_DisplayFps = StreamUtils::getDisplayRefreshRate(window);
 
     if (enablePacing) {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
@@ -314,6 +425,14 @@ bool Pacer::initialize(SDL_Window* window, int maxVideoFps, bool enablePacing)
     }
 
     if (m_VsyncSource != nullptr) {
+        // Start without pacing and let the frame arrival pattern decide
+        m_AutoPacing = autoPacing;
+        m_PacingActive = !autoPacing;
+        if (autoPacing) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Frame pacing: auto mode, only while frames arrive irregularly");
+        }
+
         m_VsyncThread = SDL_CreateThread(Pacer::vsyncThread, "PacerVsync", this);
     }
 
@@ -329,17 +448,27 @@ void Pacer::signalVsync()
     m_VsyncSignalled.wakeOne();
 }
 
+void Pacer::notifyWindowChanged(PWINDOW_STATE_CHANGE_INFO info)
+{
+    if (m_VrrWorker != nullptr) {
+        m_VrrWorker->notifyWindowChanged(info);
+        return;
+    }
+
+    // Legacy pacing has no additional window-state work. The VRR worker
+    // overrides this path to discard stale work on suspension/minimize.
+}
+
 void Pacer::renderFrame(AVFrame* frame)
 {
     // Count time spent in Pacer's queues
     uint64_t beforeRender = LiGetMicroseconds();
-    m_VideoStats->totalPacerTimeUs += (beforeRender - (uint64_t)frame->pkt_dts);
-
     // Render it
     m_VsyncRenderer->renderFrame(frame);
     uint64_t afterRender = LiGetMicroseconds();
 
-    m_VideoStats->totalRenderTimeUs += (afterRender - beforeRender);
+    m_VideoStats->totalPacerTimeUs += beforeRender - static_cast<uint64_t>(frame->pkt_dts);
+    m_VideoStats->totalRenderTimeUs += afterRender - beforeRender;
     m_VideoStats->renderedFrames++;
 
     // Wait until after next frame to free this one to ensure the GPU
@@ -400,6 +529,73 @@ void Pacer::dropFrameForEnqueue(QQueue<AVFrame*>& queue)
     }
 }
 
+// Called with m_FrameQueueLock held for each incoming frame
+void Pacer::updateAutoPacing()
+{
+    uint64_t nowUs = LiGetMicroseconds();
+    uint64_t periodUs = 1000000 / m_MaxVideoFps;
+
+    if (m_LastFrameArrivalUs != 0) {
+        uint64_t intervalUs = nowUs - m_LastFrameArrivalUs;
+
+        // Gaps longer than 2 frames mean the host had nothing new to send
+        // (static content), which pacing can't help with.
+        if (intervalUs < periodUs * 2) {
+            m_JitterSumUs += intervalUs > periodUs ? intervalUs - periodUs : periodUs - intervalUs;
+            m_JitterSamples++;
+        }
+    }
+    m_LastFrameArrivalUs = nowUs;
+
+    if (m_JitterWindowStartUs == 0) {
+        m_JitterWindowStartUs = nowUs;
+        return;
+    }
+    else if (nowUs - m_JitterWindowStartUs < AUTO_PACING_WINDOW_US) {
+        return;
+    }
+
+    // Only judge windows with enough frames to be meaningful
+    if (m_JitterSamples >= m_MaxVideoFps / 4) {
+        double jitter = (double)m_JitterSumUs / m_JitterSamples / periodUs;
+
+        if (jitter >= AUTO_PACING_ENABLE_JITTER) {
+            m_RegularWindows = 0;
+            if (++m_IrregularWindows >= AUTO_PACING_ENABLE_WINDOWS && !m_PacingActive) {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Frame pacing: enabled (frame arrival jitter %.0f%% of a frame)",
+                            jitter * 100);
+                m_PacingActive = true;
+                m_PacingQueueHistory.clear();
+            }
+        }
+        else if (jitter <= AUTO_PACING_DISABLE_JITTER) {
+            m_IrregularWindows = 0;
+            if (++m_RegularWindows >= AUTO_PACING_DISABLE_WINDOWS && m_PacingActive) {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Frame pacing: disabled (frame arrival jitter %.0f%% of a frame)",
+                            jitter * 100);
+                m_PacingActive = false;
+
+                // Hand over the frames still waiting for V-sync so they are shown in order
+                while (!m_PacingQueue.isEmpty()) {
+                    dropFrameForEnqueue(m_RenderQueue);
+                    m_RenderQueue.enqueue(m_PacingQueue.dequeue());
+                }
+            }
+        }
+        else {
+            // In between: keep the current mode
+            m_IrregularWindows = 0;
+            m_RegularWindows = 0;
+        }
+    }
+
+    m_JitterWindowStartUs = nowUs;
+    m_JitterSumUs = 0;
+    m_JitterSamples = 0;
+}
+
 void Pacer::submitFrame(AVFrame* frame)
 {
     // Make sure initialize() has been called
@@ -407,7 +603,11 @@ void Pacer::submitFrame(AVFrame* frame)
 
     // Queue the frame and possibly wake up the render thread
     m_FrameQueueLock.lock();
-    if (m_VsyncSource != nullptr) {
+    if (m_AutoPacing) {
+        updateAutoPacing();
+    }
+
+    if (m_VsyncSource != nullptr && m_PacingActive) {
         dropFrameForEnqueue(m_PacingQueue);
         m_PacingQueue.enqueue(frame);
         m_FrameQueueLock.unlock();
@@ -416,4 +616,19 @@ void Pacer::submitFrame(AVFrame* frame)
     else {
         enqueueFrameForRenderingAndUnlock(frame);
     }
+}
+
+void Pacer::submitFrame(PacedFrame&& frame)
+{
+    if (m_VrrWorker != nullptr) {
+        m_VrrWorker->submit(std::move(frame));
+        return;
+    }
+
+    submitFrame(frame.release());
+}
+
+bool Pacer::isVrrActive() const
+{
+    return m_VrrWorker != nullptr;
 }

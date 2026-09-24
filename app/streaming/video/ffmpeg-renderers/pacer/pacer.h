@@ -2,10 +2,16 @@
 
 #include "../../decoder.h"
 #include "../renderer.h"
+#include "vrr/vrrtypes.h"
 
 #include <QQueue>
 #include <QMutex>
 #include <QWaitCondition>
+
+#include <atomic>
+#include <memory>
+
+class VrrPacingWorker;
 
 // The maximum number of frames pacer will ever hold is:
 // - 3 frames in the pacing queue
@@ -35,9 +41,24 @@ public:
 
     ~Pacer();
 
+    // Only the active VRR worker consumes the decoder-facing pacing metadata.
+    void submitFrame(PacedFrame&& frame);
+
     void submitFrame(AVFrame* frame);
 
-    bool initialize(SDL_Window* window, int maxVideoFps, bool enablePacing);
+    bool isVrrActive() const;
+
+    bool initialize(SDL_Window* window, int maxVideoFps,
+                    bool enablePacing, bool enableVsync,
+                    bool enableVrr, int vrrDisplayRefreshHz,
+                    bool autoPacing = false);
+
+    void notifyWindowChanged(PWINDOW_STATE_CHANGE_INFO info);
+
+    bool isAutoPacing() const { return m_AutoPacing; }
+
+    // -1 if frame pacing isn't available, otherwise 1 while frames are paced and 0 when they aren't
+    int getPacingState() const { return m_VsyncSource == nullptr ? -1 : (m_PacingActive ? 1 : 0); }
 
     void signalVsync();
 
@@ -55,6 +76,8 @@ private:
     void renderFrame(AVFrame* frame);
 
     void dropFrameForEnqueue(QQueue<AVFrame*>& queue);
+
+    void updateAutoPacing();
 
     QQueue<AVFrame*> m_RenderQueue;
     QQueue<AVFrame*> m_PacingQueue;
@@ -75,4 +98,15 @@ private:
     int m_DisplayFps;
     PVIDEO_STATS m_VideoStats;
     int m_RendererAttributes;
+
+    // Auto pacing state (protected by m_FrameQueueLock, except m_PacingActive)
+    bool m_AutoPacing;
+    std::atomic<bool> m_PacingActive;
+    uint64_t m_LastFrameArrivalUs;
+    uint64_t m_JitterWindowStartUs;
+    uint64_t m_JitterSumUs;
+    int m_JitterSamples;
+    int m_IrregularWindows;
+    int m_RegularWindows;
+    std::unique_ptr<VrrPacingWorker> m_VrrWorker;
 };

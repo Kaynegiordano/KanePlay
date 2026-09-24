@@ -24,7 +24,19 @@ public:
     bool getNativeDesktopMode(int displayIndex, SDL_DisplayMode* mode, SDL_Rect* safeArea);
 
     static
+    int normalizeRefreshRate(int refreshRate);
+
+    static
+    int getCurrentRefreshRate(int displayIndex);
+
+    static
     int getDisplayRefreshRate(SDL_Window* window);
+
+    // Unlike getDisplayRefreshRate(), this does not guess 60 Hz. VRR session
+    // qualification must reject an unknown refresh rate rather than pace
+    // against an invented one.
+    static
+    bool tryGetDisplayRefreshRate(SDL_Window* window, int& outHz);
 
     static
     bool hasFastAes();

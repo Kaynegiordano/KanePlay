@@ -192,6 +192,7 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/session.cpp \
+    streaming/streamhealth.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
     gui/computermodel.cpp \
@@ -203,6 +204,7 @@ SOURCES += \
     settings/mappingmanager.cpp \
     gui/sdlgamepadkeynavigation.cpp \
     streaming/video/overlaymanager.cpp \
+    streaming/vrrratepolicy.cpp \
     backend/systemproperties.cpp \
     wm.cpp
 
@@ -229,11 +231,13 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/session.h \
+    streaming/streamhealth.h \
     streaming/audio/renderers/renderer.h \
     streaming/audio/renderers/sdl.h \
     gui/computermodel.h \
     gui/appmodel.h \
     streaming/video/decoder.h \
+    streaming/vrrratepolicy.h \
     streaming/bandwidth.h \
     streaming/streamutils.h \
     backend/autoupdatechecker.h \
@@ -253,7 +257,10 @@ ffmpeg {
         streaming/video/ffmpeg-renderers/genhwaccel.cpp \
         streaming/video/ffmpeg-renderers/sdlvid.cpp \
         streaming/video/ffmpeg-renderers/swframemapper.cpp \
-        streaming/video/ffmpeg-renderers/pacer/pacer.cpp
+        streaming/video/ffmpeg-renderers/pacer/pacer.cpp \
+        streaming/video/ffmpeg-renderers/pacer/vrrpacingworker.cpp \
+        streaming/video/ffmpeg-renderers/pacer/vrr/vrrtimingcontroller.cpp \
+        streaming/video/ffmpeg-renderers/pacer/vrr/vrrtargetwaiter.cpp
 
     HEADERS += \
         streaming/video/ffmpeg.h \
@@ -261,7 +268,12 @@ ffmpeg {
         streaming/video/ffmpeg-renderers/genhwaccel.h \
         streaming/video/ffmpeg-renderers/sdlvid.h \
         streaming/video/ffmpeg-renderers/swframemapper.h \
-        streaming/video/ffmpeg-renderers/pacer/pacer.h
+        streaming/video/ffmpeg-renderers/pacer/pacer.h \
+        streaming/video/ffmpeg-renderers/pacer/vrrpacingworker.h \
+        streaming/video/ffmpeg-renderers/ivrrframepresenter.h \
+        streaming/video/ffmpeg-renderers/pacer/vrr/vrrtypes.h \
+        streaming/video/ffmpeg-renderers/pacer/vrr/vrrtimingcontroller.h \
+        streaming/video/ffmpeg-renderers/pacer/vrr/vrrtargetwaiter.h
 }
 libva {
     message(VAAPI renderer selected)

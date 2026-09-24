@@ -1,6 +1,7 @@
 #include "session.h"
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
+#include "streaming/vrrratepolicy.h"
 #include "backend/richpresencemanager.h"
 
 #include <Limelight.h>
@@ -65,6 +66,8 @@ CONNECTION_LISTENER_CALLBACKS Session::k_ConnCallbacks = {
 
 Session* Session::s_ActiveSession;
 QSemaphore Session::s_ActiveSessionSemaphore(1);
+QSize Session::s_DecoderMaxResolution;
+bool Session::s_DecoderMaxResolutionProbed;
 
 void Session::clStageStarting(int stage)
 {
@@ -175,6 +178,10 @@ void Session::clConnectionStatusUpdate(int connectionStatus)
                 "Connection status update: %d",
                 connectionStatus);
 
+    if (s_ActiveSession->m_StreamHealthMonitor != nullptr) {
+        s_ActiveSession->m_StreamHealthMonitor->onConnectionStatus(connectionStatus);
+    }
+
     if (!s_ActiveSession->m_Preferences->connectionWarnings) {
         return;
     }
@@ -278,7 +285,11 @@ void Session::clSetAdaptiveTriggers(uint16_t controllerNumber, uint8_t eventFlag
 bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
                             StreamingPreferences::RendererSelection renderer,
                             SDL_Window* window, int videoFormat, int width, int height,
-                            int frameRate, bool enableVsync, bool enableFramePacing, bool testOnly, IVideoDecoder*& chosenDecoder)
+                            int frameRate, bool enableVsync, bool enableFramePacing,
+                            bool testOnly, IVideoDecoder*& chosenDecoder,
+                            bool enableVrr, int vrrDisplayRefreshHz,
+                            [[maybe_unused]] bool* effectiveVrr,
+                            bool autoFramePacing)
 {
     DECODER_PARAMETERS params;
 
@@ -294,6 +305,9 @@ bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
     params.window = window;
     params.enableVsync = enableVsync;
     params.enableFramePacing = enableFramePacing;
+    params.autoFramePacing = enableFramePacing && autoFramePacing;
+    params.enableVrr = enableVrr;
+    params.vrrDisplayRefreshHz = vrrDisplayRefreshHz;
     params.testOnly = testOnly;
     params.vds = vds;
     params.renderer = renderer;
@@ -303,8 +317,18 @@ bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
                 enableVsync ? "enabled" : "disabled");
 
 #ifdef HAVE_SLVIDEO
+    // SLVideo has no VRR backend, so don't hand it an active VRR request. If
+    // it fails below, FFmpeg still receives the original parameters.
+    DECODER_PARAMETERS slVideoParams = params;
+    slVideoParams.enableVrr = false;
+    slVideoParams.vrrDisplayRefreshHz = 0;
     chosenDecoder = new SLVideoDecoder(testOnly);
-    if (chosenDecoder->initialize(&params)) {
+    if (chosenDecoder->initialize(&slVideoParams)) {
+        // Keep the session snapshot aligned with the decoder that was
+        // actually selected without changing the stored preference.
+        if (effectiveVrr != nullptr) {
+            *effectiveVrr = false;
+        }
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "SLVideo video decoder chosen");
         return true;
@@ -392,6 +416,18 @@ void Session::getDecoderInfo(SDL_Window* window,
 {
     IVideoDecoder* decoder;
 
+    // Every successful probe reports the same set of decoder attributes. The
+    // maximum resolution is also kept for automatic resolution mode to use.
+    auto recordDecoderInfo = [&](IVideoDecoder* decoder) {
+        isHardwareAccelerated = decoder->isHardwareAccelerated();
+        isFullScreenOnly = decoder->isAlwaysFullScreen();
+        maxResolution = decoder->getDecoderMaxResolution();
+        delete decoder;
+
+        s_DecoderMaxResolution = maxResolution;
+        s_DecoderMaxResolutionProbed = true;
+    };
+
     // Since AV1 support on the host side is in its infancy, let's not consider
     // _only_ a working AV1 decoder to be acceptable and still show the warning
     // dialog indicating lack of hardware decoding support.
@@ -401,12 +437,8 @@ void Session::getDecoderInfo(SDL_Window* window,
                       StreamingPreferences::RS_PROBE_ONLY,
                       window, VIDEO_FORMAT_H265_MAIN10, 1920, 1080, 60,
                       false, false, true, decoder)) {
-        isHardwareAccelerated = decoder->isHardwareAccelerated();
-        isFullScreenOnly = decoder->isAlwaysFullScreen();
         isHdrSupported = decoder->isHdrSupported();
-        maxResolution = decoder->getDecoderMaxResolution();
-        delete decoder;
-
+        recordDecoderInfo(decoder);
         return;
     }
 
@@ -447,11 +479,7 @@ void Session::getDecoderInfo(SDL_Window* window,
                       StreamingPreferences::RS_PROBE_ONLY,
                       window, VIDEO_FORMAT_H265, 1920, 1080, 60,
                       false, false, true, decoder)) {
-        isHardwareAccelerated = decoder->isHardwareAccelerated();
-        isFullScreenOnly = decoder->isAlwaysFullScreen();
-        maxResolution = decoder->getDecoderMaxResolution();
-        delete decoder;
-
+        recordDecoderInfo(decoder);
         return;
     }
 
@@ -461,11 +489,7 @@ void Session::getDecoderInfo(SDL_Window* window,
                       StreamingPreferences::RS_PROBE_ONLY,
                       window, VIDEO_FORMAT_AV1_MAIN8, 1920, 1080, 60,
                       false, false, true, decoder)) {
-        isHardwareAccelerated = decoder->isHardwareAccelerated();
-        isFullScreenOnly = decoder->isAlwaysFullScreen();
-        maxResolution = decoder->getDecoderMaxResolution();
-        delete decoder;
-
+        recordDecoderInfo(decoder);
         return;
     }
 #endif
@@ -476,11 +500,7 @@ void Session::getDecoderInfo(SDL_Window* window,
                       StreamingPreferences::RS_PROBE_ONLY,
                       window, VIDEO_FORMAT_H264, 1920, 1080, 60,
                       false, false, true, decoder)) {
-        isHardwareAccelerated = decoder->isHardwareAccelerated();
-        isFullScreenOnly = decoder->isAlwaysFullScreen();
-        maxResolution = decoder->getDecoderMaxResolution();
-        delete decoder;
-
+        recordDecoderInfo(decoder);
         return;
     }
 
@@ -584,7 +604,8 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_OpusDecoder(nullptr),
       m_AudioRenderer(nullptr),
       m_AudioSampleCount(0),
-      m_DropAudioEndTime(0)
+      m_DropAudioEndTime(0),
+      m_StreamHealthMonitor(nullptr)
 {
 }
 
@@ -594,18 +615,90 @@ Session::~Session()
     // Use Session::exec() or DeferredSessionCleanupTask instead.
 
     SDL_DestroyMutex(m_DecoderLock);
+
+    // Normally already destroyed by DeferredSessionCleanupTask
+    delete m_StreamHealthMonitor;
+}
+
+void Session::snapshotPresentationSettings(SDL_Window* window)
+{
+    if (!m_Preferences->enableVrr) {
+        return;
+    }
+
+    // VRR must never qualify against an invented refresh rate, so this uses
+    // the strict query rather than getDisplayRefreshRate()'s 60 Hz guess.
+    // Requiring adaptive headroom also implies the stream rate stays below the
+    // refresh rate, which is the condition that would force V-sync off later.
+    int refreshRate = 0;
+    if (!m_Preferences->enableVsync ||
+            !StreamUtils::tryGetDisplayRefreshRate(window, refreshRate) ||
+            !VrrRatePolicy::hasAdaptiveHeadroom(m_StreamConfig.fps, refreshRate)) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "VRR disabled: V-sync %s, %d FPS at %d Hz",
+                    m_Preferences->enableVsync ? "enabled" : "disabled",
+                    m_StreamConfig.fps, refreshRate);
+        return;
+    }
+
+    m_PresentationSettings.enableVrr = true;
+    m_PresentationSettings.refreshRate = refreshRate;
+
+    // Adaptive presentation requires borderless (non-exclusive) fullscreen.
+    // This is session-local state: the stored window-mode preference is never
+    // rewritten, so a later non-VRR session returns to that choice.
+    m_IsFullScreen = true;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "VRR enabled at %d Hz; forcing borderless fullscreen for this session",
+                refreshRate);
 }
 
 bool Session::initialize(QQuickWindow* qtWindow)
 {
     m_QtWindow = qtWindow;
 
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "SDL_InitSubSystem(SDL_INIT_VIDEO) failed: %s",
+                     SDL_GetError());
+        return false;
+    }
+
+    // Stop text input. SDL enables it by default
+    // when we initialize the video subsystem, but this
+    // causes an IME popup when certain keys are held down
+    // on macOS.
+    SDL_StopTextInput();
+
+    LiInitializeStreamConfiguration(&m_StreamConfig);
+    m_StreamConfig.width = m_Preferences->width;
+    m_StreamConfig.height = m_Preferences->height;
+    m_StreamConfig.fps = m_Preferences->fps;
+    m_StreamConfig.bitrate = m_Preferences->bitrateKbps;
+
+    // Create a hidden window to use for decoder initialization tests
+    SDL_Window* testWindow = StreamUtils::createTestWindow();
+    if (!testWindow) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Failed to create window for hardware decode test: %s",
+                     SDL_GetError());
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        return false;
+    }
+
+    // Replace the saved resolution and/or frame rate with the client display's
+    // own values if the user asked us to match it automatically
+    overrideStreamConfigForClientDisplay(testWindow);
+
 #ifdef Q_OS_DARWIN
     if (qEnvironmentVariableIntValue("I_WANT_BUGGY_FULLSCREEN") == 0) {
-        // If we have a notch and the user specified one of the two native display modes
+        // If we have a notch and we're streaming at one of the two native display modes
         // (notched or notchless), override the fullscreen mode to ensure it works as expected.
         // - SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES=0 will place the video underneath the notch
         // - SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES=1 will place the video below the notch
+        //
+        // This must run after the automatic resolution override so it sees the resolution
+        // we will actually stream at, and before the stream window is created.
         bool shouldUseFullScreenSpaces = m_Preferences->windowMode != StreamingPreferences::WM_FULLSCREEN;
         SDL_DisplayMode desktopMode;
         SDL_Rect safeArea;
@@ -613,13 +706,13 @@ bool Session::initialize(QQuickWindow* qtWindow)
             // Check if this display has a notch (safeArea != desktopMode)
             if (desktopMode.h != safeArea.h || desktopMode.w != safeArea.w) {
                 // Check if we're trying to stream at the full native resolution (including notch)
-                if (m_Preferences->width == desktopMode.w && m_Preferences->height == desktopMode.h) {
+                if (m_StreamConfig.width == desktopMode.w && m_StreamConfig.height == desktopMode.h) {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Overriding default fullscreen mode for native fullscreen resolution");
                     shouldUseFullScreenSpaces = false;
                     break;
                 }
-                else if (m_Preferences->width == safeArea.w && m_Preferences->height == safeArea.h) {
+                else if (m_StreamConfig.width == safeArea.w && m_StreamConfig.height == safeArea.h) {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Overriding default fullscreen mode for native safe area resolution");
                     shouldUseFullScreenSpaces = true;
@@ -642,35 +735,14 @@ bool Session::initialize(QQuickWindow* qtWindow)
     }
 #endif
 
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "SDL_InitSubSystem(SDL_INIT_VIDEO) failed: %s",
-                     SDL_GetError());
-        return false;
-    }
-
-    // Stop text input. SDL enables it by default
-    // when we initialize the video subsystem, but this
-    // causes an IME popup when certain keys are held down
-    // on macOS.
-    SDL_StopTextInput();
-
-    LiInitializeStreamConfiguration(&m_StreamConfig);
-    m_StreamConfig.width = m_Preferences->width;
-    m_StreamConfig.height = m_Preferences->height;
-
     int x, y, width, height;
     getWindowDimensions(x, y, width, height);
 
-    // Create a hidden window to use for decoder initialization tests
-    SDL_Window* testWindow = StreamUtils::createTestWindow();
-    if (!testWindow) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "Failed to create window for hardware decode test: %s",
-                     SDL_GetError());
-        SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        return false;
-    }
+    // The test window normally starts on display zero. Move it to the
+    // display selected for the real streaming window before snapshotting the
+    // refresh rate, otherwise a multi-monitor session could qualify VRR using
+    // the wrong panel's refresh.
+    SDL_SetWindowPosition(testWindow, x, y);
 
     qInfo() << "Server GPU:" << m_Computer->gpuModel;
     qInfo() << "Server GFE version:" << m_Computer->gfeVersion;
@@ -678,8 +750,7 @@ bool Session::initialize(QQuickWindow* qtWindow)
     LiInitializeVideoCallbacks(&m_VideoCallbacks);
     m_VideoCallbacks.setup = drSetup;
 
-    m_StreamConfig.fps = m_Preferences->fps;
-    m_StreamConfig.bitrate = m_Preferences->bitrateKbps;
+    snapshotPresentationSettings(testWindow);
 
 #ifndef STEAM_LINK
     // Opt-in to all encryption features if we detect that the platform
@@ -693,10 +764,6 @@ bool Session::initialize(QQuickWindow* qtWindow)
         m_StreamConfig.encryptionFlags = ENCFLG_AUDIO;
     }
 #endif
-
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "Video bitrate: %d kbps",
-                m_StreamConfig.bitrate);
 
     RAND_bytes(reinterpret_cast<unsigned char*>(m_StreamConfig.remoteInputAesKey),
                sizeof(m_StreamConfig.remoteInputAesKey));
@@ -924,6 +991,12 @@ bool Session::initialize(QQuickWindow* qtWindow)
         m_FullScreenFlag = SDL_WINDOW_FULLSCREEN;
 #endif
         break;
+    }
+
+    if (m_PresentationSettings.enableVrr) {
+        // Adaptive presentation requires borderless fullscreen. The saved
+        // window-mode preference is intentionally left untouched.
+        m_FullScreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
 
 #if !SDL_VERSION_ATLEAST(2, 0, 11)
@@ -1291,6 +1364,13 @@ private:
         // Finish cleanup of the connection state
         LiStopConnection();
 
+        // Nothing can report stats or connection status anymore
+        if (m_Session->m_StreamHealthMonitor != nullptr) {
+            m_Session->m_StreamHealthMonitor->finishSession();
+        }
+        delete m_Session->m_StreamHealthMonitor;
+        m_Session->m_StreamHealthMonitor = nullptr;
+
         // Perform a best-effort app quit
         if (shouldQuit) {
             NvHTTP http(m_Session->m_Computer);
@@ -1315,53 +1395,183 @@ private:
     Session* m_Session;
 };
 
+int Session::predictNegotiatedVideoFormat()
+{
+    // Mirror the codec choice moonlight-common-c makes during the RTSP handshake:
+    // the best codec both sides support, AV1 first, then HEVC, then H.264.
+    int formats = m_StreamConfig.supportedVideoFormats;
+    int serverCodecs = m_Computer->serverCodecModeSupport;
+
+    if ((formats & VIDEO_FORMAT_MASK_AV1) && (serverCodecs & SCM_MASK_AV1)) {
+        formats &= VIDEO_FORMAT_MASK_AV1;
+    }
+    else if ((formats & VIDEO_FORMAT_MASK_H265) && (serverCodecs & SCM_MASK_HEVC)) {
+        formats &= VIDEO_FORMAT_MASK_H265;
+    }
+    else {
+        formats &= VIDEO_FORMAT_MASK_H264;
+    }
+
+    // Keep the YUV444 bit only if the host can deliver it
+    if (!(serverCodecs & SCM_MASK_YUV444)) {
+        formats &= ~VIDEO_FORMAT_MASK_YUV444;
+    }
+
+    return formats != 0 ? formats : VIDEO_FORMAT_H264;
+}
+
+void Session::overrideStreamConfigForClientDisplay(SDL_Window* testWindow)
+{
+    if (!m_Preferences->autoResolution && !m_Preferences->autoFps) {
+        return;
+    }
+
+    int displayIndex = getStreamDisplayIndex();
+
+    if (m_Preferences->autoResolution) {
+        SDL_DisplayMode desktopMode;
+        SDL_Rect safeArea;
+
+        // getNativeDesktopMode() can succeed with a zeroed mode on macOS if no
+        // display mode is flagged as native, so treat an empty safe area as a
+        // detection failure.
+        if (StreamUtils::getNativeDesktopMode(displayIndex, &desktopMode, &safeArea) &&
+                safeArea.w > 0 && safeArea.h > 0) {
+            // The settings page never offers resolutions above what the decoder
+            // supports, so don't let automatic mode pick one either. The GUI probes
+            // this limit once at startup, but the command line stream path skips
+            // that probe, so run it here if it hasn't happened yet.
+            if (!s_DecoderMaxResolutionProbed) {
+                bool isHardwareAccelerated, isFullScreenOnly, isHdrSupported;
+                QSize probedMaxResolution;
+                getDecoderInfo(testWindow, isHardwareAccelerated, isFullScreenOnly,
+                               isHdrSupported, probedMaxResolution);
+            }
+
+            QSize maxResolution = s_DecoderMaxResolution;
+            if (!maxResolution.isEmpty() &&
+                    safeArea.w * safeArea.h > maxResolution.width() * maxResolution.height()) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Display %d resolution %dx%d exceeds decoder maximum of %dx%d. Using %dx%d.",
+                            displayIndex, safeArea.w, safeArea.h,
+                            maxResolution.width(), maxResolution.height(),
+                            m_StreamConfig.width, m_StreamConfig.height);
+            }
+            else {
+                // Use the safe area rather than the full native resolution, so we don't
+                // render video underneath a notch on displays that have one. They are
+                // identical on displays without a notch.
+                m_StreamConfig.width = safeArea.w;
+                m_StreamConfig.height = safeArea.h;
+
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Matching resolution of display %d: %dx%d",
+                            displayIndex, m_StreamConfig.width, m_StreamConfig.height);
+            }
+        }
+        else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Unable to detect resolution of display %d. Using %dx%d.",
+                        displayIndex, m_StreamConfig.width, m_StreamConfig.height);
+        }
+    }
+
+    if (m_Preferences->autoFps) {
+        // Match the rate the display is running at now, not the highest it supports
+        int refreshRate = StreamUtils::getCurrentRefreshRate(displayIndex);
+        if (refreshRate != 0) {
+            m_StreamConfig.fps = refreshRate;
+
+            // VRR pacing needs the stream slightly below the refresh rate to have
+            // adaptive headroom, so use the rate it recommends for this display.
+            if (m_Preferences->enableVrr && m_Preferences->enableVsync &&
+                    VrrRatePolicy::vrrRateForRefresh(refreshRate) > 0) {
+                m_StreamConfig.fps = VrrRatePolicy::vrrRateForRefresh(refreshRate);
+            }
+
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Matching refresh rate of display %d: %d FPS",
+                        displayIndex, m_StreamConfig.fps);
+        }
+        else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Unable to detect refresh rate of display %d. Using %d FPS.",
+                        displayIndex, m_StreamConfig.fps);
+        }
+    }
+
+    // The default bitrate was computed for the saved resolution and frame rate, so it
+    // needs to be recalculated for the display mode we actually ended up with. If the
+    // user picked their own bitrate, we assume they really wanted that value.
+    if (m_Preferences->autoAdjustBitrate) {
+        // Never exceed the ceiling of the bitrate slider on the settings page
+        m_StreamConfig.bitrate = qMin(StreamingPreferences::getDefaultBitrate(m_StreamConfig.width,
+                                                                              m_StreamConfig.height,
+                                                                              m_StreamConfig.fps,
+                                                                              m_Preferences->enableYUV444),
+                                      StreamingPreferences::getMaxBitrate(m_Preferences->unlockBitrate));
+    }
+}
+
+int Session::getStreamDisplayIndex()
+{
+    if (m_Window != nullptr) {
+        int displayIndex = SDL_GetWindowDisplayIndex(m_Window);
+        SDL_assert(displayIndex >= 0);
+        return displayIndex >= 0 ? displayIndex : 0;
+    }
+
+    // We will create our window on the same display that Qt's UI
+    // was being displayed on.
+    Q_ASSERT(m_QtWindow != nullptr);
+    if (m_QtWindow != nullptr) {
+        QScreen* screen = m_QtWindow->screen();
+        if (screen != nullptr) {
+            QRect displayRect = screen->geometry();
+
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Qt UI screen is at (%d,%d)",
+                        displayRect.x(), displayRect.y());
+            for (int i = 0; i < SDL_GetNumVideoDisplays(); i++) {
+                SDL_Rect displayBounds;
+
+                if (SDL_GetDisplayBounds(i, &displayBounds) == 0) {
+                    if (displayBounds.x == displayRect.x() &&
+                        displayBounds.y == displayRect.y()) {
+                        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                                    "SDL found matching display %d",
+                                    i);
+                        return i;
+                    }
+                }
+                else {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "SDL_GetDisplayBounds(%d) failed: %s",
+                                i, SDL_GetError());
+                }
+            }
+
+            // Falling through means Qt and SDL disagree about where this
+            // display starts. Say so, because using display 0 instead will
+            // otherwise look like a correct result that picked the wrong
+            // display.
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "No SDL display found at (%d,%d). Using display 0.",
+                        displayRect.x(), displayRect.y());
+        }
+        else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Qt window is not associated with a QScreen!");
+        }
+    }
+
+    return 0;
+}
+
 void Session::getWindowDimensions(int& x, int& y,
                                   int& width, int& height)
 {
-    int displayIndex = 0;
-
-    if (m_Window != nullptr) {
-        displayIndex = SDL_GetWindowDisplayIndex(m_Window);
-        SDL_assert(displayIndex >= 0);
-    }
-    // Create our window on the same display that Qt's UI
-    // was being displayed on.
-    else {
-        Q_ASSERT(m_QtWindow != nullptr);
-        if (m_QtWindow != nullptr) {
-            QScreen* screen = m_QtWindow->screen();
-            if (screen != nullptr) {
-                QRect displayRect = screen->geometry();
-
-                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                            "Qt UI screen is at (%d,%d)",
-                            displayRect.x(), displayRect.y());
-                for (int i = 0; i < SDL_GetNumVideoDisplays(); i++) {
-                    SDL_Rect displayBounds;
-
-                    if (SDL_GetDisplayBounds(i, &displayBounds) == 0) {
-                        if (displayBounds.x == displayRect.x() &&
-                            displayBounds.y == displayRect.y()) {
-                            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                                        "SDL found matching display %d",
-                                        i);
-                            displayIndex = i;
-                            break;
-                        }
-                    }
-                    else {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                    "SDL_GetDisplayBounds(%d) failed: %s",
-                                    i, SDL_GetError());
-                    }
-                }
-            }
-            else {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "Qt window is not associated with a QScreen!");
-            }
-        }
-    }
+    int displayIndex = getStreamDisplayIndex();
 
     SDL_Rect usableBounds;
     if (SDL_GetDisplayUsableBounds(displayIndex, &usableBounds) == 0) {
@@ -1651,6 +1861,45 @@ bool Session::startConnectionAsync()
         hostInfo.rtspSessionUrl = rtspSessionUrlStr.data();
     }
 
+    NvComputer::ActiveAddressRoute activeAddressRoute = {
+        NvComputer::ReachabilityType::RI_UNKNOWN,
+        NvComputer::NetworkType::NT_UNKNOWN,
+    };
+
+    // Route detection does network I/O, so only perform it after we've already
+    // contacted the PC successfully. Reuse the result for packet-size selection.
+    if (m_Preferences->useWifiBitrate || m_Preferences->packetSize == 0) {
+        activeAddressRoute = m_Computer->getActiveAddressRoute();
+    }
+
+    bool usingWifiBitrate = false;
+    if (m_Preferences->useWifiBitrate) {
+        if (activeAddressRoute.networkType == NvComputer::NetworkType::NT_ETHERNET &&
+                activeAddressRoute.reachability != NvComputer::ReachabilityType::RI_VPN) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Ethernet route detected; using configured Ethernet bitrate");
+        }
+        else {
+            m_StreamConfig.bitrate = m_Preferences->wifiBitrateKbps;
+            usingWifiBitrate = true;
+
+            if (activeAddressRoute.networkType == NvComputer::NetworkType::NT_WIFI) {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Wi-Fi route detected; using configured Wi-Fi bitrate");
+            }
+            else if (activeAddressRoute.reachability == NvComputer::ReachabilityType::RI_VPN) {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "VPN route detected; using configured Wi-Fi bitrate");
+            }
+            else {
+                // Only permit the potentially very high primary bitrate when the
+                // route is positively identified as Ethernet.
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Non-Ethernet or unknown route detected; using configured Wi-Fi bitrate");
+            }
+        }
+    }
+
     if (m_Preferences->packetSize != 0) {
         // Override default packet size and remote streaming detection
         // NB: Using STREAM_CFG_AUTO will cap our packet size at 1024 for remote hosts.
@@ -1664,9 +1913,7 @@ bool Session::startConnectionAsync()
         // Use 1392 byte video packets by default
         m_StreamConfig.packetSize = 1392;
 
-        // getActiveAddressReachability() does network I/O, so we only attempt to check
-        // reachability if we've already contacted the PC successfully.
-        switch (m_Computer->getActiveAddressReachability()) {
+        switch (activeAddressRoute.reachability) {
         case NvComputer::RI_LAN:
             // This address is on-link, so treat it as a local address
             // even if it's not in RFC 1918 space or it's an IPv6 address.
@@ -1683,6 +1930,21 @@ bool Session::startConnectionAsync()
             m_StreamConfig.streamingRemotely = STREAM_CFG_AUTO;
             break;
         }
+    }
+
+    if (m_Preferences->autoAdjustBitrate && !usingWifiBitrate) {
+        // The user didn't pick a bitrate, so pick the lowest one that still looks good
+        // for the codec we're going to get. This also takes care of hosts that can't
+        // do YUV444 by falling back to the 4:2:0 bitrate.
+        int videoFormat = predictNegotiatedVideoFormat();
+        m_StreamConfig.bitrate = StreamingPreferences::getDefaultBitrate(m_StreamConfig.width,
+                                                                         m_StreamConfig.height,
+                                                                         m_StreamConfig.fps,
+                                                                         (videoFormat & VIDEO_FORMAT_MASK_YUV444) != 0,
+                                                                         videoFormat);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Default bitrate adjusted for expected codec (0x%x): %d kbps",
+                    videoFormat, m_StreamConfig.bitrate);
     }
 
     // If the user has chosen YUV444 without adjusting the bitrate but the host doesn't
@@ -1702,6 +1964,37 @@ bool Session::startConnectionAsync()
                                                                          m_StreamConfig.fps,
                                                                          false);
     }
+
+    // Start from the share of the bitrate this host's network proved able to carry
+    // in previous sessions. Local and remote streaming are learned separately.
+    QString learnedBitrateKey;
+    double learnedFactor = 1.0;
+    if (m_Preferences->learnBitrate) {
+        learnedBitrateKey = m_Computer->uuid + "/" +
+                            (m_StreamConfig.streamingRemotely == STREAM_CFG_REMOTE ? "remote" :
+                             m_StreamConfig.streamingRemotely == STREAM_CFG_LOCAL ? "local" : "auto");
+        learnedFactor = StreamingPreferences::getLearnedBitrateFactor(learnedBitrateKey);
+        if (learnedFactor < 1.0) {
+            int learnedBitrate = qMax(500, qRound(m_StreamConfig.bitrate * learnedFactor / 500) * 500);
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Learned bitrate: using %.0f%% of %d kbps (%d kbps)",
+                        learnedFactor * 100, m_StreamConfig.bitrate, learnedBitrate);
+            m_StreamConfig.bitrate = learnedBitrate;
+        }
+    }
+
+    delete m_StreamHealthMonitor;
+    m_StreamHealthMonitor = new StreamHealthMonitor(m_StreamConfig.bitrate,
+                                                    learnedFactor,
+                                                    learnedBitrateKey,
+                                                    m_Preferences->logStreamStats,
+                                                    m_StreamConfig.width,
+                                                    m_StreamConfig.height,
+                                                    m_StreamConfig.fps);
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Video bitrate: %d kbps",
+                m_StreamConfig.bitrate);
 
     int err = LiStartConnection(&hostInfo, &m_StreamConfig, &k_ConnCallbacks,
                                 &m_VideoCallbacks, &m_AudioCallbacks,
@@ -1963,6 +2256,20 @@ void Session::exec()
     // Hijack this thread to be the SDL main thread. We have to do this
     // because we want to suspend all Qt processing until the stream is over.
     SDL_Event event;
+    auto notifyDecoderWindowState = [this](uint32_t stateChangeFlags) {
+        if (m_VideoDecoder == nullptr) {
+            return;
+        }
+
+        WINDOW_STATE_CHANGE_INFO windowChangeInfo = {};
+        windowChangeInfo.window = m_Window;
+        windowChangeInfo.stateChangeFlags = stateChangeFlags;
+
+        // State-only notifications are advisory.  Legacy renderers may return
+        // false for these new flags, but they must never force a renderer reset.
+        m_VideoDecoder->notifyWindowChanged(&windowChangeInfo);
+    };
+
     for (;;) {
 #if SDL_VERSION_ATLEAST(2, 0, 18) && !defined(STEAM_LINK)
         // SDL 2.0.18 has a proper wait event implementation that uses platform
@@ -2042,6 +2349,17 @@ void Session::exec()
             break;
 
         case SDL_WINDOWEVENT:
+            switch (event.window.event) {
+            case SDL_WINDOWEVENT_MINIMIZED:
+            case SDL_WINDOWEVENT_HIDDEN:
+                notifyDecoderWindowState(WINDOW_STATE_CHANGE_MINIMIZED);
+                break;
+            case SDL_WINDOWEVENT_RESTORED:
+            case SDL_WINDOWEVENT_SHOWN:
+                notifyDecoderWindowState(WINDOW_STATE_CHANGE_RESTORED);
+                break;
+            }
+
             // Early handling of some events
             switch (event.window.event) {
             case SDL_WINDOWEVENT_FOCUS_LOST:
@@ -2124,6 +2442,24 @@ void Session::exec()
                 }
 
                 int newDisplayIndex = SDL_GetWindowDisplayIndex(m_Window);
+
+                // A VRR session's display period is snapshotted at startup and
+                // baked into the renderer's immutable presentation mode, so any
+                // refresh change (including a mode switch on the same monitor)
+                // must drop back to fixed pacing rather than pace against a
+                // stale period.
+                if (m_PresentationSettings.enableVrr) {
+                    int currentRefreshRate = 0;
+                    if (!StreamUtils::tryGetDisplayRefreshRate(m_Window,
+                                                               currentRefreshRate) ||
+                            currentRefreshRate != m_PresentationSettings.refreshRate) {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "VRR disabled for this session after display refresh changed or became unavailable");
+                        m_PresentationSettings.enableVrr = false;
+                        forceRecreation = true;
+                    }
+                }
+
                 if (newDisplayIndex != currentDisplayIndex) {
                     windowChangeInfo.stateChangeFlags |= WINDOW_STATE_CHANGE_DISPLAY;
 
@@ -2206,6 +2542,13 @@ void Session::exec()
                     enableVsync = false;
                 }
 
+                // A VRR request that was rejected still runs on the fixed
+                // V-sync fallback, so keep that fallback paced even if the
+                // separate frame pacing option is off.
+                bool enableFramePacing = enableVsync &&
+                        (m_Preferences->framePacing ||
+                         (m_Preferences->enableVrr && !m_PresentationSettings.enableVrr));
+
                 // Choose a new decoder (hopefully the same one, but possibly
                 // not if a GPU was removed or something).
                 if (!chooseDecoder(m_Preferences->videoDecoderSelection,
@@ -2213,9 +2556,13 @@ void Session::exec()
                                    m_Window, m_ActiveVideoFormat, m_ActiveVideoWidth,
                                    m_ActiveVideoHeight, m_ActiveVideoFrameRate,
                                    enableVsync,
-                                   enableVsync && m_Preferences->framePacing,
+                                   enableFramePacing,
                                    false,
-                                   s_ActiveSession->m_VideoDecoder)) {
+                                   s_ActiveSession->m_VideoDecoder,
+                                   m_PresentationSettings.enableVrr,
+                                   m_PresentationSettings.refreshRate,
+                                   &m_PresentationSettings.enableVrr,
+                                   m_Preferences->autoFramePacing)) {
                     SDL_UnlockMutex(m_DecoderLock);
                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                                  "Failed to recreate decoder after reset");

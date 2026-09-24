@@ -20,17 +20,27 @@ ApplicationWindow {
 
     id: window
     width: 1280
-    height: 600
+    height: 720
+
+    color: Theme.background
+    Material.theme: Material.Dark
+    Material.accent: Theme.accent
+    Material.primary: Theme.surfaceAlt
+    Material.background: Theme.surface
+    Material.foreground: Theme.text
+
+    // The app library of the PC we're browsing, if any, for the top bar
+    property var libraryView: null
+    property int connectedGamepads: 0
+
+    function findLibraryView() {
+        return stackView.find(function(item, index) {
+            return item instanceof AppView
+        })
+    }
 
     // This function runs prior to creation of the initial StackView item
     function doEarlyInit() {
-        // Override the background color to Material 2 colors for Qt 6.5+
-        // in order to improve contrast between GFE's placeholder box art
-        // and the background of the app grid.
-        if (SystemProperties.usesMaterial3Theme) {
-            Material.background = "#303030"
-        }
-
         SdlGamepadKeyNavigation.enable()
     }
 
@@ -123,6 +133,8 @@ ApplicationWindow {
             if (currentItem) {
                 currentItem.forceActiveFocus()
             }
+
+            libraryView = findLibraryView()
         }
 
         Keys.onEscapePressed: {
@@ -233,32 +245,22 @@ ApplicationWindow {
         }
     }
 
-    header: ToolBar {
+    header: Rectangle {
         id: toolBar
-        height: 60
-        anchors.topMargin: 5
-        anchors.bottomMargin: 5
-
-        Label {
-            id: titleLabel
-            visible: toolBar.width > 700
-            anchors.fill: parent
-            text: stackView.currentItem.objectName
-            font.pointSize: 20
-            elide: Label.ElideRight
-            horizontalAlignment: Qt.AlignHCenter
-            verticalAlignment: Qt.AlignVCenter
-        }
+        height: 84
+        color: Theme.background
 
         RowLayout {
-            spacing: 10
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
             anchors.fill: parent
+            anchors.leftMargin: 24
+            anchors.rightMargin: 24
+            spacing: 8
 
             NavigableToolButton {
                 // Only make the button visible if the user has navigated somewhere.
                 visible: stackView.depth > 1
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: 48
 
                 iconSource: "qrc:/res/arrow_left.svg"
 
@@ -269,27 +271,124 @@ ApplicationWindow {
                 }
             }
 
-            // This label will appear when the window gets too small and
-            // we need to ensure the toolbar controls don't collide
-            Label {
-                id: titleRowLabel
-                font.pointSize: titleLabel.font.pointSize
-                elide: Label.ElideRight
-                horizontalAlignment: Qt.AlignHCenter
-                verticalAlignment: Qt.AlignVCenter
-                Layout.fillWidth: true
+            Row {
+                spacing: 12
+                Layout.rightMargin: 20
 
-                // We need this label to always be visible so it can occupy
-                // the remaining space in the RowLayout. To "hide" it, we
-                // just set the text to empty string.
-                text: !titleLabel.visible ? stackView.currentItem.objectName : ""
+                Image {
+                    source: "qrc:/res/moon.svg"
+                    sourceSize.width: 30
+                    sourceSize.height: 30
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    // Hidden on narrow windows so the tabs keep their room
+                    visible: toolBar.width > 900
+                    text: "Moonlight"
+                    font.family: Theme.displayFont
+                    font.pointSize: 17
+                    font.weight: Font.Bold
+                    color: Theme.text
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
+            NavPill {
+                id: pcPill
+                text: qsTr("PCs")
+                visible: stackView.depth > 0 && stackView.get(0) instanceof PcView
+                selected: stackView.currentItem instanceof PcView
+                onClicked: {
+                    if (stackView.depth > 1) {
+                        stackView.pop(null)
+                        clearOnBack = false
+                    }
+                }
+            }
+
+            NavPill {
+                id: libraryPill
+                text: qsTr("Library")
+                visible: libraryView !== null
+                selected: libraryView !== null && stackView.currentItem === libraryView
+                onClicked: {
+                    if (libraryView !== null && stackView.currentItem !== libraryView) {
+                        stackView.pop(libraryView)
+                    }
+                }
+            }
+
+            NavPill {
+                id: settingsButton
+                text: qsTr("Settings")
+                selected: stackView.currentItem instanceof SettingsView
+
+                onClicked: navigateTo("qrc:/gui/SettingsView.qml", SettingsView)
+
+                Shortcut {
+                    id: settingsShortcut
+                    sequence: StandardKey.Preferences
+                    onActivated: settingsButton.clicked()
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+            }
+
+            // The PC whose library we're browsing
+            Rectangle {
+                visible: libraryView !== null && toolBar.width > 1000
+                implicitWidth: hostRow.implicitWidth + 32
+                implicitHeight: 52
+                radius: Theme.radius
+                color: Theme.surfaceAlt
+                border.width: 1
+                border.color: Theme.border
+
+                Row {
+                    id: hostRow
+                    anchors.centerIn: parent
+                    spacing: 12
+
+                    Rectangle {
+                        width: 10
+                        height: 10
+                        radius: 5
+                        color: Theme.success
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+
+                        Text {
+                            text: libraryView !== null ? libraryView.objectName : ""
+                            font.family: Theme.textFont
+                            font.pointSize: 11
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+
+                        Text {
+                            text: qsTr("Connected")
+                            font.family: Theme.textFont
+                            font.pointSize: 9
+                            color: Theme.textSecondary
+                        }
+                    }
+                }
             }
 
             Label {
                 id: versionLabel
                 visible: stackView.currentItem instanceof SettingsView
                 text: qsTr("Version %1").arg(SystemProperties.versionString)
-                font.pointSize: 12
+                font.family: Theme.textFont
+                font.pointSize: 11
+                color: Theme.textSecondary
                 horizontalAlignment: Qt.AlignRight
                 verticalAlignment: Qt.AlignVCenter
             }
@@ -298,6 +397,8 @@ ApplicationWindow {
                 id: discordButton
                 visible: SystemProperties.hasBrowser &&
                          stackView.currentItem instanceof SettingsView
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: 48
 
                 iconSource: "qrc:/res/discord.svg"
 
@@ -317,6 +418,8 @@ ApplicationWindow {
             NavigableToolButton {
                 id: addPcButton
                 visible: stackView.currentItem instanceof PcView
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: 48
 
                 iconSource:  "qrc:/res/ic_add_to_queue_white_48px.svg"
 
@@ -344,6 +447,8 @@ ApplicationWindow {
                 property string browserUrl: ""
 
                 id: updateButton
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: 48
 
                 iconSource: "qrc:/res/update.svg"
 
@@ -381,6 +486,8 @@ ApplicationWindow {
             NavigableToolButton {
                 id: helpButton
                 visible: SystemProperties.hasBrowser
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: 48
 
                 iconSource: "qrc:/res/question_mark.svg"
 
@@ -402,48 +509,59 @@ ApplicationWindow {
                     stackView.currentItem.forceActiveFocus(Qt.TabFocus)
                 }
             }
+        }
+    }
 
-            NavigableToolButton {
-                // TODO: Implement gamepad mapping then unhide this button
-                visible: false
+    // Gamepad button hints, shown while a gamepad is connected (always on handhelds)
+    footer: Rectangle {
+        visible: connectedGamepads > 0
+        height: visible ? 56 : 0
+        color: Theme.background
 
-                ToolTip.delay: 1000
-                ToolTip.timeout: 3000
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Gamepad Mapper")
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: Theme.border
+        }
 
-                iconSource: "qrc:/res/ic_videogame_asset_white_48px.svg"
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.pagePadding
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 28
 
-                onClicked: navigateTo("qrc:/gui/GamepadMapper.qml", GamepadMapper)
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
+            GamepadHint {
+                glyph: "A"
+                label: stackView.currentItem instanceof AppView ? qsTr("Play") :
+                       stackView.currentItem instanceof SettingsView ? qsTr("Change") : qsTr("Select")
             }
 
-            NavigableToolButton {
-                id: settingsButton
+            GamepadHint {
+                glyph: "X"
+                label: qsTr("Options")
+                visible: !(stackView.currentItem instanceof SettingsView)
+            }
 
-                iconSource:  "qrc:/res/settings.svg"
+            GamepadHint {
+                glyph: "Y"
+                label: qsTr("Settings")
+                visible: !(stackView.currentItem instanceof SettingsView)
+            }
 
-                onClicked: navigateTo("qrc:/gui/SettingsView.qml", SettingsView)
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
-
-                Shortcut {
-                    id: settingsShortcut
-                    sequence: StandardKey.Preferences
-                    onActivated: settingsButton.clicked()
-                }
-
-                ToolTip.delay: 1000
-                ToolTip.timeout: 3000
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Settings") + (settingsShortcut.nativeText ? (" ("+settingsShortcut.nativeText+")") : "")
+            GamepadHint {
+                glyph: "B"
+                label: stackView.depth > 1 ? qsTr("Back") : qsTr("Quit")
             }
         }
+    }
+
+    // SdlGamepadKeyNavigation has no change notification, so check periodically
+    Timer {
+        interval: 2000
+        running: window.active
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: connectedGamepads = SdlGamepadKeyNavigation.getConnectedGamepads()
     }
 
     ErrorMessageDialog {

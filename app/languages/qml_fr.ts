@@ -55,6 +55,38 @@
         <source>Are you sure you want to quit %1? Any unsaved progress will be lost.</source>
         <translation>Êtes-vous sûr de vouloir arrêter %1&#x202f;? Tout progrès non enregistré sera perdu.</translation>
     </message>
+    <message>
+        <source>Automatic resolution</source>
+        <translation>Résolution automatique</translation>
+    </message>
+    <message>
+        <source>Automatic FPS</source>
+        <translation>FPS automatiques</translation>
+    </message>
+    <message>
+        <source>%1 FPS</source>
+        <translation>%1 FPS</translation>
+    </message>
+    <message>
+        <source>%1 Mbps</source>
+        <translation>%1 Mbps</translation>
+    </message>
+    <message>
+        <source>RUNNING ON THE HOST</source>
+        <translation>EN COURS SUR L&apos;HÔTE</translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <source>Applications</source>
+        <translation>Applications</translation>
+    </message>
+    <message>
+        <source>RUNNING</source>
+        <translation>EN COURS</translation>
+    </message>
 </context>
 <context>
     <name>CliPair</name>
@@ -349,6 +381,22 @@
         <location filename="../gui/PcView.qml" line="351"/>
         <source>Enter the new name for this PC:</source>
         <translation>Saisissez le nouveau nom de ce PC :</translation>
+    </message>
+    <message>
+        <source>Your PCs</source>
+        <translation>Vos PC</translation>
+    </message>
+    <message>
+        <source>Choose the PC to stream from. Press X or right-click a PC for more options.</source>
+        <translation>Choisissez le PC depuis lequel streamer. Appuyez sur X ou faites un clic droit sur un PC pour plus d&apos;options.</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>Vérification…</translation>
+    </message>
+    <message>
+        <source>Not paired</source>
+        <translation>Non appairé</translation>
     </message>
 </context>
 <context>
@@ -1192,6 +1240,118 @@
         <source>Automatically detect blocked connections (Recommended)</source>
         <translation>Détecter automatiquement les connexions bloquées (recommandé)</translation>
     </message>
+    <message>
+        <source>The default bitrate is lowered when the stream starts if the PC can use HEVC or AV1, which need less data than H.264 for the same quality.</source>
+        <translation>Le débit par défaut est réduit au lancement si le PC peut utiliser HEVC ou AV1, qui ont besoin de moins de données que H.264 pour la même qualité.</translation>
+    </message>
+    <message>
+        <source>Save stream statistics to a CSV file</source>
+        <translation>Enregistrer les statistiques du stream dans un fichier CSV</translation>
+    </message>
+    <message>
+        <source>Writes one line per second (frame rate, lost frames, latency, decoding time, bitrate) to a Moonlight-stats-*.csv file next to the Moonlight logs.</source>
+        <translation>Écrit une ligne par seconde (images par seconde, images perdues, latence, temps de décodage, débit) dans un fichier Moonlight-stats-*.csv à côté des journaux de Moonlight.</translation>
+    </message>
+    <message>
+        <source>Learn the right bitrate for each PC</source>
+        <translation>Apprendre le bon débit pour chaque PC</translation>
+    </message>
+    <message>
+        <source>After each stream, Moonlight checks how many frames were lost. If the network couldn&apos;t keep up, the next stream to this PC starts with a lower bitrate. After clean streams, the bitrate slowly goes back up to the one chosen above.</source>
+        <translation>Après chaque stream, Moonlight vérifie combien d&apos;images ont été perdues. Si le réseau n&apos;a pas suivi, le stream suivant vers ce PC démarre avec un débit plus bas. Après des streams sans pertes, le débit remonte doucement jusqu&apos;à celui choisi ci-dessus.</translation>
+    </message>
+    <message>
+        <source>Turning this off forgets what was learned.</source>
+        <translation>Désactiver cette option efface ce qui a été appris.</translation>
+    </message>
+    <message>
+        <source>Only when needed</source>
+        <translation>Seulement si nécessaire</translation>
+    </message>
+    <message>
+        <source>Frame pacing adds up to one frame of latency. With this option, it only turns on while frames arrive irregularly because of the network, and turns back off once they arrive steadily again.</source>
+        <translation>Le frame pacing ajoute jusqu&apos;à une image de latence. Avec cette option, il ne s&apos;active que lorsque les images arrivent irrégulièrement à cause du réseau, et se désactive dès qu&apos;elles arrivent de nouveau régulièrement.</translation>
+    </message>
+    <message>
+        <source>Automatic values are detected when the stream starts, so connecting a different display doesn&apos;t require changing this setting.</source>
+        <translation>Les valeurs automatiques sont détectées au lancement du stream : brancher un autre écran ne demande pas de modifier ce réglage.</translation>
+    </message>
+    <message>
+        <source>Automatic (Match Client Display)</source>
+        <translation>Automatique (selon l&apos;écran)</translation>
+    </message>
+    <message>
+        <source>Ethernet video bitrate: %1 Mbps</source>
+        <translation>Débit vidéo en Ethernet : %1 Mbps</translation>
+    </message>
+    <message>
+        <source>Use a separate bitrate for Wi-Fi</source>
+        <translation>Utiliser un débit différent en Wi-Fi</translation>
+    </message>
+    <message>
+        <source>The primary bitrate is used only when the route to the host is detected as Ethernet. Wi-Fi, VPN, and unknown connection types use the safer Wi-Fi bitrate.</source>
+        <translation>Le débit principal n&apos;est utilisé que si la connexion vers l&apos;hôte passe par Ethernet. Le Wi-Fi, les VPN et les connexions inconnues utilisent le débit Wi-Fi, plus prudent.</translation>
+    </message>
+    <message>
+        <source>Wi-Fi video bitrate: %1 Mbps</source>
+        <translation>Débit vidéo en Wi-Fi : %1 Mbps</translation>
+    </message>
+    <message>
+        <source>Used for Wi-Fi and whenever an Ethernet route cannot be confirmed.</source>
+        <translation>Utilisé en Wi-Fi et chaque fois qu&apos;une connexion Ethernet ne peut pas être confirmée.</translation>
+    </message>
+    <message>
+        <source>Renderer</source>
+        <translation>Moteur de rendu</translation>
+    </message>
+    <message>
+        <source>Video and network</source>
+        <translation>Image et réseau</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation>Son</translation>
+    </message>
+    <message>
+        <source>Host</source>
+        <translation>Hôte</translation>
+    </message>
+    <message>
+        <source>Interface</source>
+        <translation>Interface</translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation>Saisie</translation>
+    </message>
+    <message>
+        <source>Gamepads</source>
+        <translation>Manettes</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Avancé</translation>
+    </message>
+    <message>
+        <source>VRR (%1 FPS)</source>
+        <translation>VRR (%1 FPS)</translation>
+    </message>
+    <message>
+        <source>Low-latency VRR (%1 FPS)</source>
+        <translation>VRR faible latence (%1 FPS)</translation>
+    </message>
+    <message>
+        <source>Enable VRR</source>
+        <translation>Activer le VRR</translation>
+    </message>
+    <message>
+        <source>VRR uses paced adaptive presentation with best-effort tear avoidance. Sessions without enough refresh-rate headroom use fixed V-Sync. Borderless fullscreen is used while VRR is active.</source>
+        <translation>Le VRR cadence l&apos;affichage sur une fréquence variable en évitant au mieux les déchirures d&apos;image. Les sessions sans marge suffisante sous la fréquence de l&apos;écran utilisent la V-Sync classique. Le plein écran sans bordure est utilisé tant que le VRR est actif.</translation>
+    </message>
+    <message>
+        <source>VRR requires V-Sync. Enable V-Sync to change this setting.</source>
+        <translation>Le VRR nécessite la V-Sync. Activez la V-Sync pour modifier ce réglage.</translation>
+    </message>
 </context>
 <context>
     <name>StreamSegue</name>
@@ -1323,6 +1483,42 @@
         <location filename="../gui/main.qml" line="487"/>
         <source>Are you sure you want to quit?</source>
         <translation>Êtes-vous sûr de vouloir quitter&#x202f;?</translation>
+    </message>
+    <message>
+        <source>PCs</source>
+        <translation>PC</translation>
+    </message>
+    <message>
+        <source>Library</source>
+        <translation>Bibliothèque</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Connecté</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Jouer</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Modifier</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation>Choisir</translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Retour</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Quitter</translation>
     </message>
 </context>
 </TS>

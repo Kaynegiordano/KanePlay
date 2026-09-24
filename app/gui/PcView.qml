@@ -15,10 +15,33 @@ CenteredGridView {
     id: pcGrid
     focus: true
     activeFocusOnTab: true
-    topMargin: 20
-    bottomMargin: 5
-    cellWidth: 310; cellHeight: 330;
+    topMargin: 8
+    bottomMargin: 24
+    minMargin: Theme.pagePadding - 12
+    cellWidth: 324; cellHeight: 244;
     objectName: qsTr("Computers")
+
+    header: Column {
+        x: 12
+        width: pcGrid.width - pcGrid.leftMargin - pcGrid.rightMargin
+        bottomPadding: 24
+        spacing: 6
+
+        Text {
+            text: qsTr("Your PCs")
+            font.family: Theme.displayFont
+            font.pointSize: 30
+            font.weight: Font.Black
+            color: Theme.text
+        }
+
+        Text {
+            text: qsTr("Choose the PC to stream from. Press X or right-click a PC for more options.")
+            font.family: Theme.textFont
+            font.pointSize: 11
+            color: Theme.textSecondary
+        }
+    }
 
     Component.onCompleted: {
         // Don't show any highlighted item until interacting with them.
@@ -107,57 +130,107 @@ CenteredGridView {
     model: computerModel
 
     delegate: NavigableItemDelegate {
-        width: 300; height: 320;
+        id: pcCard
+        width: 300; height: 220;
         grid: pcGrid
+        padding: 0
 
         property alias pcContextMenu : pcContextMenuLoader.item
 
-        Image {
-            id: pcIcon
-            anchors.horizontalCenter: parent.horizontalCenter
-            source: "qrc:/res/desktop_windows-48px.svg"
-            sourceSize {
-                width: 200
-                height: 200
+        readonly property string statusText: model.statusUnknown ? qsTr("Checking…") :
+                                             !model.online ? qsTr("Offline") :
+                                             !model.paired ? qsTr("Not paired") : qsTr("Online")
+        readonly property color statusColor: model.statusUnknown ? Theme.textTertiary :
+                                             !model.online ? Theme.danger :
+                                             !model.paired ? Theme.warning : Theme.success
+
+        background: Rectangle {
+            radius: Theme.radiusLarge
+            color: pcCard.highlighted || pcCard.hovered ? Theme.raised : Theme.surface
+            border.width: pcCard.highlighted ? 3 : 1
+            border.color: pcCard.highlighted ? Theme.accent : Theme.border
+        }
+
+        contentItem: Item {
+            Rectangle {
+                id: iconTile
+                x: 24
+                y: 24
+                width: 64
+                height: 64
+                radius: Theme.radius
+                color: Theme.surfaceAlt
+
+                Image {
+                    id: pcIcon
+                    anchors.centerIn: parent
+                    source: "qrc:/res/desktop_windows-48px.svg"
+                    sourceSize.width: 40
+                    sourceSize.height: 40
+                    opacity: model.online ? 1.0 : 0.5
+                }
+
+                Image {
+                    id: stateIcon
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: -6
+                    visible: !model.statusUnknown && (!model.online || !model.paired)
+                    source: !model.online ? "qrc:/res/warning_FILL1_wght300_GRAD200_opsz24.svg" : "qrc:/res/baseline-lock-24px.svg"
+                    sourceSize.width: 26
+                    sourceSize.height: 26
+                }
+
+                BusyIndicator {
+                    id: statusUnknownSpinner
+                    anchors.centerIn: parent
+                    width: 56
+                    height: 56
+                    visible: model.statusUnknown
+                    running: visible
+                }
             }
-        }
 
-        Image {
-            // TODO: Tooltip
-            id: stateIcon
-            anchors.horizontalCenter: pcIcon.horizontalCenter
-            anchors.verticalCenter: pcIcon.verticalCenter
-            anchors.verticalCenterOffset: !model.online ? -18 : -16
-            visible: !model.statusUnknown && (!model.online || !model.paired)
-            source: !model.online ? "qrc:/res/warning_FILL1_wght300_GRAD200_opsz24.svg" : "qrc:/res/baseline-lock-24px.svg"
-            sourceSize {
-                width: !model.online ? 75 : 70
-                height: !model.online ? 75 : 70
+            Text {
+                id: pcNameText
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: statusRow.top
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 6
+                text: model.name
+                font.family: Theme.displayFont
+                font.pointSize: 18
+                font.weight: Font.Bold
+                color: Theme.text
+                elide: Text.ElideRight
             }
-        }
 
-        BusyIndicator {
-            id: statusUnknownSpinner
-            anchors.horizontalCenter: pcIcon.horizontalCenter
-            anchors.verticalCenter: pcIcon.verticalCenter
-            anchors.verticalCenterOffset: -15
-            width: 75
-            height: 75
-            visible: model.statusUnknown
-            running: visible
-        }
+            Row {
+                id: statusRow
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 24
+                anchors.bottomMargin: 22
+                spacing: 8
 
-        Label {
-            id: pcNameText
-            text: model.name
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: pcCard.statusColor
+                    anchors.verticalCenter: parent.verticalCenter
+                }
 
-            width: parent.width
-            anchors.top: pcIcon.bottom
-            anchors.bottom: parent.bottom
-            font.pointSize: 36
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.Wrap
-            elide: Text.ElideRight
+                Text {
+                    text: pcCard.statusText
+                    font.family: Theme.textFont
+                    font.pointSize: 11
+                    color: Theme.textSecondary
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
         }
 
         Loader {
