@@ -17,6 +17,10 @@
 
     <Property Id="APPDATAFOLDER" Value="%LOCALAPPDATA%\Moonlight Game Streaming Project" />
 
+    <!-- MoonlightSetup.exe passes the user's choice. Without a default, running the MSI on its
+         own writes an empty integer to the registry, which fails with error 1406. -->
+    <Property Id="ADDDESKTOPSHORTCUT" Value="1" />
+
     <!-- There's no way to delete a registry key on uninstall but not major upgrade, so
         we have to roll our own deletion via custom action -->
     <CustomAction Id="DeleteRegistryKey"
