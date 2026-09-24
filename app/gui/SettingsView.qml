@@ -1151,7 +1151,8 @@ Item {
                             ToolTip.delay: 1000
                             ToolTip.timeout: 8000
                             ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Frame pacing adds up to one frame of latency. With this option, it only turns on while frames arrive irregularly because of the network, and turns back off once they arrive steadily again.")
+                            ToolTip.text: qsTr("Frame pacing adds up to one frame of latency. With this option, it only turns on while frames arrive irregularly because of the network, and turns back off once they arrive steadily again.") + "\n\n" +
+                                      qsTr("In exclusive fullscreen, Windows requires frames to be paced to the display, so this option only applies to borderless fullscreen and windowed modes.")
                         }
 
                         CheckBox {

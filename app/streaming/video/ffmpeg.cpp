@@ -530,6 +530,10 @@ bool FFmpegVideoDecoder::completeInitialization(const AVCodec* decoder, enum AVP
     if (testMode != TestMode::TestFrameOnly) {
         m_Pacer = new Pacer(m_FrontendRenderer, &m_ActiveWndVideoStats);
         bool forcePacing = params->enableVsync && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_FORCE_PACING);
+        if (forcePacing && params->autoFramePacing) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Frame pacing: auto mode unavailable, this renderer always paces frames in exclusive fullscreen");
+        }
         if (!m_Pacer->initialize(params->window, params->frameRate,
                                  params->enableFramePacing || forcePacing,
                                  params->enableVsync,

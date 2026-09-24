@@ -1352,6 +1352,10 @@
         <source>VRR requires V-Sync. Enable V-Sync to change this setting.</source>
         <translation>Le VRR nécessite la V-Sync. Activez la V-Sync pour modifier ce réglage.</translation>
     </message>
+    <message>
+        <source>In exclusive fullscreen, Windows requires frames to be paced to the display, so this option only applies to borderless fullscreen and windowed modes.</source>
+        <translation>En plein écran exclusif, Windows impose de caler les images sur l&apos;écran : cette option ne s&apos;applique donc qu&apos;en plein écran sans bordure et en mode fenêtré.</translation>
+    </message>
 </context>
 <context>
     <name>StreamSegue</name>
