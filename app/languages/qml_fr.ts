@@ -1397,6 +1397,18 @@
         <translation>Si le réseau coupe pendant un stream, relance aussitôt le même jeu, jusqu&apos;à 3 fois, au lieu de revenir à la bibliothèque.</translation>
     </message>
     <message>
+        <source>Double the frame rate (frame interpolation)</source>
+        <translation>Doubler les images (interpolation)</translation>
+    </message>
+    <message>
+        <source>Moonlight computes the motion between two frames and draws an extra frame between them, so a 60 FPS stream is shown at 120 FPS. It works with any graphics card and adds about one display refresh of latency.</source>
+        <translation>Moonlight calcule le mouvement entre deux images et dessine une image supplémentaire entre elles : un stream à 60 FPS s&apos;affiche à 120 FPS. Fonctionne avec toutes les cartes graphiques et ajoute environ un rafraîchissement d&apos;écran de latence.</translation>
+    </message>
+    <message>
+        <source>With the automatic frame rate, the stream runs at half the refresh rate of the display. Limit the game to that frame rate on the host to avoid stutter. VRR is not used while this option is on.</source>
+        <translation>Avec les FPS automatiques, le stream tourne à la moitié de la fréquence de l&apos;écran. Limitez le jeu à cette cadence sur l&apos;hôte pour éviter les saccades. Le VRR n&apos;est pas utilisé tant que cette option est active.</translation>
+    </message>
+    <message>
         <source>Save battery when unplugged</source>
         <translation>Économiser la batterie hors secteur</translation>
     </message>

@@ -1209,6 +1209,25 @@ Item {
                     }
 
                     CheckBox {
+                        id: frameInterpolationCheck
+                        width: parent.width
+                        hoverEnabled: true
+                        text: qsTr("Double the frame rate (frame interpolation)")
+                        font.pointSize: 12
+                        visible: Qt.platform.os === "windows"
+                        checked: StreamingPreferences.frameInterpolation
+                        onCheckedChanged: {
+                            StreamingPreferences.frameInterpolation = checked
+                        }
+
+                        ToolTip.delay: 1000
+                        ToolTip.timeout: 12000
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Moonlight computes the motion between two frames and draws an extra frame between them, so a 60 FPS stream is shown at 120 FPS. It works with any graphics card and adds about one display refresh of latency.") + "\n\n" +
+                                      qsTr("With the automatic frame rate, the stream runs at half the refresh rate of the display. Limit the game to that frame rate on the host to avoid stutter. VRR is not used while this option is on.")
+                    }
+
+                    CheckBox {
                         id: enableHdr
                         width: parent.width
                         text: qsTr("Enable HDR")

@@ -273,6 +273,11 @@ public:
         return nullptr;
     }
 
+    // True if the renderer shows an interpolated frame between decoded frames
+    virtual bool isFrameInterpolationActive() {
+        return false;
+    }
+
     virtual bool isDirectRenderingSupported() {
         // The renderer can render directly to the display
         return true;

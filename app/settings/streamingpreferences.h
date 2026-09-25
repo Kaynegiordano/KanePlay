@@ -153,6 +153,7 @@ public:
     Q_PROPERTY(bool learnBitrate MEMBER learnBitrate NOTIFY learnBitrateChanged)
     Q_PROPERTY(bool autoReconnect MEMBER autoReconnect NOTIFY autoReconnectChanged)
     Q_PROPERTY(bool batterySaver MEMBER batterySaver NOTIFY batterySaverChanged)
+    Q_PROPERTY(bool frameInterpolation MEMBER frameInterpolation NOTIFY frameInterpolationChanged)
     Q_PROPERTY(bool autoFramePacing MEMBER autoFramePacing NOTIFY framePacingChanged)
     Q_PROPERTY(bool logStreamStats MEMBER logStreamStats NOTIFY logStreamStatsChanged)
     Q_PROPERTY(bool enableVsync MEMBER enableVsync NOTIFY enableVsyncChanged)
@@ -212,6 +213,7 @@ public:
     bool learnBitrate;
     bool autoReconnect;
     bool batterySaver;
+    bool frameInterpolation;
     bool autoFramePacing;
     bool logStreamStats;
     bool enableVsync;
@@ -259,6 +261,7 @@ signals:
     void learnBitrateChanged();
     void autoReconnectChanged();
     void batterySaverChanged();
+    void frameInterpolationChanged();
     void logStreamStatsChanged();
     void enableVsyncChanged();
     void enableVrrChanged();

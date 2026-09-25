@@ -312,6 +312,7 @@ bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
     params.autoFramePacing = enableFramePacing && autoFramePacing;
     params.enableVrr = enableVrr;
     params.vrrDisplayRefreshHz = vrrDisplayRefreshHz;
+    params.enableFrameInterpolation = !testOnly && StreamingPreferences::get()->frameInterpolation;
     params.testOnly = testOnly;
     params.vds = vds;
     params.renderer = renderer;
@@ -630,6 +631,13 @@ Session::~Session()
 void Session::snapshotPresentationSettings(SDL_Window* window)
 {
     if (!m_Preferences->enableVrr) {
+        return;
+    }
+
+    // Frame interpolation times the frames it adds to the display refresh itself
+    if (m_Preferences->frameInterpolation) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "VRR disabled: frame interpolation is enabled");
         return;
     }
 
@@ -1503,9 +1511,14 @@ void Session::overrideStreamConfigForClientDisplay(SDL_Window* testWindow)
         if (refreshRate != 0) {
             m_StreamConfig.fps = refreshRate;
 
+            // Frame interpolation doubles the frame rate of the stream, so half
+            // the refresh rate is enough to fill the display.
+            if (m_Preferences->frameInterpolation && refreshRate >= 90) {
+                m_StreamConfig.fps = refreshRate / 2;
+            }
             // VRR pacing needs the stream slightly below the refresh rate to have
             // adaptive headroom, so use the rate it recommends for this display.
-            if (m_Preferences->enableVrr && m_Preferences->enableVsync &&
+            else if (m_Preferences->enableVrr && m_Preferences->enableVsync &&
                     VrrRatePolicy::vrrRateForRefresh(refreshRate) > 0) {
                 m_StreamConfig.fps = VrrRatePolicy::vrrRateForRefresh(refreshRate);
             }

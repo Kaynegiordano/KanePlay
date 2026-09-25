@@ -51,6 +51,8 @@ typedef struct _DECODER_PARAMETERS {
     // the session was not qualified for VRR; Pacer must not substitute a
     // legacy 60 Hz fallback when this path is requested.
     int vrrDisplayRefreshHz;
+    // Show an interpolated frame between each pair of decoded frames
+    bool enableFrameInterpolation;
     bool testOnly;
 } DECODER_PARAMETERS, *PDECODER_PARAMETERS;
 

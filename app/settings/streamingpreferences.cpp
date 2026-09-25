@@ -35,6 +35,7 @@
 #define SER_LASTSESSIONS "lastsessions"
 #define SER_AUTORECONNECT "autoreconnect"
 #define SER_BATTERYSAVER "batterysaver"
+#define SER_FRAMEINTERPOLATION "frameinterpolation"
 #define SER_LOGSTREAMSTATS "logstreamstats"
 #define SER_FULLSCREEN "fullscreen"
 #define SER_VSYNC "vsync"
@@ -157,6 +158,7 @@ void StreamingPreferences::reload()
     autoFramePacing = settings.value(SER_AUTOFRAMEPACING, true).toBool();
     autoReconnect = settings.value(SER_AUTORECONNECT, true).toBool();
     batterySaver = settings.value(SER_BATTERYSAVER, true).toBool();
+    frameInterpolation = settings.value(SER_FRAMEINTERPOLATION, false).toBool();
     logStreamStats = settings.value(SER_LOGSTREAMSTATS, false).toBool();
     enableVsync = settings.value(SER_VSYNC, true).toBool();
     enableVrr = settings.value(SER_ENABLEVRR, false).toBool();
@@ -369,6 +371,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_AUTOFRAMEPACING, autoFramePacing);
     settings.setValue(SER_AUTORECONNECT, autoReconnect);
     settings.setValue(SER_BATTERYSAVER, batterySaver);
+    settings.setValue(SER_FRAMEINTERPOLATION, frameInterpolation);
     settings.setValue(SER_LOGSTREAMSTATS, logStreamStats);
     settings.setValue(SER_VSYNC, enableVsync);
     settings.setValue(SER_ENABLEVRR, enableVrr);

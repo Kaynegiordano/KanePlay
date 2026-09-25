@@ -1143,6 +1143,9 @@ void FFmpegVideoDecoder::stringifyVideoStatsCompact(VIDEO_STATS& stats, char* ou
     else if (m_Pacer != nullptr && m_Pacer->isAutoPacing()) {
         extras << (m_Pacer->getPacingState() == 1 ? "PACING AUTO ON" : "PACING AUTO OFF");
     }
+    if (m_FrontendRenderer != nullptr && m_FrontendRenderer->isFrameInterpolationActive()) {
+        extras << "FRAME GEN x2";
+    }
 
     Session* session = Session::get();
     if (session != nullptr) {

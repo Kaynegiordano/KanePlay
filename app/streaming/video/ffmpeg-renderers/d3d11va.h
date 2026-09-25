@@ -1,5 +1,6 @@
 #pragma once
 
+#include "d3d11frameinterpolator.h"
 #include "ivrrframepresenter.h"
 #include "renderer.h"
 
@@ -13,6 +14,8 @@ extern "C" {
 #include <wrl/client.h>
 #include <wrl/wrappers/corewrappers.h>
 
+#include <memory>
+
 class D3D11VARenderer : public IFFmpegRenderer, public IVrrFramePresenter
 {
 public:
@@ -23,6 +26,7 @@ public:
     virtual bool prepareDecoderContextInGetFormat(AVCodecContext* context, AVPixelFormat pixelFormat) override;
     virtual void renderFrame(AVFrame* frame) override;
     virtual IVrrFramePresenter* getVrrFramePresenter() override;
+    virtual bool isFrameInterpolationActive() override { return m_FrameInterpolator != nullptr; }
 
     virtual bool canLatchAdaptivePresent() const override { return true; }
     virtual VrrFallbackReason checkSupport() const override;
@@ -57,6 +61,12 @@ private:
     bool setupVideoTexture(AVHWFramesContext* framesContext); // for !m_BindDecoderOutputTextures
     bool setupTexturePoolViews(AVHWFramesContext* framesContext); // for m_BindDecoderOutputTextures
     bool prepareFrameForPresent(AVFrame* frame);
+    void updateSwapChainColorSpace(AVFrame* frame);
+    void setDisplayViewport();
+    bool initializeFrameInterpolation();
+    void renderInterpolatedFrame(AVFrame* frame);
+    void bindFrameInterpolationVertexBuffer(AVFrame* frame, bool convert);
+    void waitForInterpolatedFrame(IDXGIOutput* output, bool fenceSignalled, uint64_t presentUs);
     bool initializeVrrPresentReadyFence();
     bool waitForVrrPresentReady();
     HRESULT presentPreparedFrame(UINT flags);
@@ -69,7 +79,7 @@ private:
     bool createOverlayVertexBuffer(Overlay::OverlayType type, int width, int height, Microsoft::WRL::ComPtr<ID3D11Buffer>& newVertexBuffer);
     void bindColorConversion(bool frameChanged, AVFrame* frame);
     void bindVideoVertexBuffer(bool frameChanged, AVFrame* frame);
-    void renderVideo(AVFrame* frame);
+    void renderVideo(AVFrame* frame, bool toFrameInterpolator = false);
     bool checkDecoderSupport(IDXGIAdapter* adapter);
     bool createDeviceByAdapterIndex(int adapterIndex, bool* adapterNotFound = nullptr);
     bool setupSharedDevice(IDXGIAdapter1* adapter);
@@ -143,6 +153,17 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>, Overlay::OverlayMax> m_OverlayTextures;
     std::array<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, Overlay::OverlayMax> m_OverlayTextureResourceViews;
     Microsoft::WRL::ComPtr<ID3D11PixelShader> m_OverlayPixelShader;
+
+    // Frame interpolation (shows an extra frame between each pair of decoded frames)
+    std::unique_ptr<D3D11FrameInterpolator> m_FrameInterpolator;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiConvertVertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiDisplayVertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Fence> m_FiFence;
+    UINT64 m_FiFenceValue;
+    HANDLE m_FiFenceEvent;
+    HANDLE m_FiTimer;
+    uint64_t m_FiInterpolatedFrames;
+    uint64_t m_FiDecodedFrames;
 
     AVBufferRef* m_HwDeviceContext;
 };

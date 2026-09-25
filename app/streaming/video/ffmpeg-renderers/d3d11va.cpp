@@ -16,6 +16,10 @@
 
 using Microsoft::WRL::ComPtr;
 
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+
 // Standard DXVA GUIDs for HEVC RExt profiles (redefined for compatibility with pre-24H2 SDKs)
 DEFINE_GUID(k_D3D11_DECODER_PROFILE_HEVC_VLD_MAIN_444,   0x4008018f, 0xf537, 0x4b36, 0x98, 0xcf, 0x61, 0xaf, 0x8a, 0x2c, 0x1a, 0x33);
 DEFINE_GUID(k_D3D11_DECODER_PROFILE_HEVC_VLD_MAIN10_444, 0x0dabeffa, 0x4458, 0x4602, 0xbc, 0x03, 0x07, 0x95, 0x65, 0x9d, 0x61, 0x7c);
@@ -75,6 +79,11 @@ D3D11VARenderer::D3D11VARenderer(int decoderSelectionPass)
       m_VrrPresentReadyFenceEvent(nullptr),
       m_VrrPresentReadyAvailable(false),
       m_OverlayLock(0),
+      m_FiFenceValue(0),
+      m_FiFenceEvent(nullptr),
+      m_FiTimer(nullptr),
+      m_FiInterpolatedFrames(0),
+      m_FiDecodedFrames(0),
       m_HwDeviceContext(nullptr)
 {
     m_ContextLock = SDL_CreateMutex();
@@ -90,6 +99,25 @@ D3D11VARenderer::~D3D11VARenderer()
     // back-buffer objects.
     cancelFrame();
     SDL_DestroyMutex(m_ContextLock);
+
+    if (m_FrameInterpolator) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation: %llu frames added to %llu decoded frames",
+                    (unsigned long long)m_FiInterpolatedFrames,
+                    (unsigned long long)m_FiDecodedFrames);
+    }
+    m_FrameInterpolator.reset();
+    m_FiConvertVertexBuffer.Reset();
+    m_FiDisplayVertexBuffer.Reset();
+    m_FiFence.Reset();
+    if (m_FiFenceEvent != nullptr) {
+        CloseHandle(m_FiFenceEvent);
+        m_FiFenceEvent = nullptr;
+    }
+    if (m_FiTimer != nullptr) {
+        CloseHandle(m_FiTimer);
+        m_FiTimer = nullptr;
+    }
 
     m_VideoVertexBuffer.Reset();
     for (auto& shader : m_VideoPixelShaders) {
@@ -699,6 +727,57 @@ bool D3D11VARenderer::initialize(PDECODER_PARAMETERS params)
         return false;
     }
 
+    // Frame interpolation is optional, the stream just plays at its own rate without it
+    if (params->enableFrameInterpolation && !params->testOnly) {
+        initializeFrameInterpolation();
+    }
+
+    return true;
+}
+
+bool D3D11VARenderer::initializeFrameInterpolation()
+{
+    // Each decoded frame needs a refresh of its own plus one for the interpolated frame
+    int refreshRate = StreamUtils::getDisplayRefreshRate(m_DecoderParams.window);
+    if (m_DecoderParams.frameRate <= 0 || refreshRate * 10 < m_DecoderParams.frameRate * 18) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation: unavailable, a %d Hz display can't show twice %d FPS",
+                    refreshRate, m_DecoderParams.frameRate);
+        return false;
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    m_SwapChain->GetDesc1(&swapChainDesc);
+
+    auto interpolator = std::make_unique<D3D11FrameInterpolator>();
+    if (!interpolator->initialize(m_RenderDevice.Get(), m_RenderDeviceContext.Get(), swapChainDesc.Format)) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation: unavailable, unable to create GPU resources");
+        return false;
+    }
+
+    // Used to wait until the interpolated frame is ready to be shown. Without
+    // it, we just rely on timing.
+    if (SUCCEEDED(m_RenderDevice->CreateFence(0, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_FiFence)))) {
+        m_FiFenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (m_FiFenceEvent == nullptr) {
+            m_FiFence.Reset();
+        }
+    }
+
+    // Without V-sync, the decoded frame is shown half a frame after the interpolated
+    // one. A high resolution timer avoids Sleep()'s coarse granularity.
+    m_FiTimer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    if (m_FiTimer == nullptr) {
+        m_FiTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
+    }
+
+    m_FrameInterpolator = std::move(interpolator);
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Frame interpolation: %d FPS stream shown at %d FPS on a %d Hz display (%s)",
+                m_DecoderParams.frameRate, m_DecoderParams.frameRate * 2, refreshRate,
+                m_AllowTearing ? "timed" : "V-sync");
     return true;
 }
 
@@ -761,6 +840,11 @@ bool D3D11VARenderer::prepareDecoderContextInGetFormat(AVCodecContext *context, 
 
 void D3D11VARenderer::renderFrame(AVFrame* frame)
 {
+    if (m_FrameInterpolator) {
+        renderInterpolatedFrame(frame);
+        return;
+    }
+
     // Acquire the context lock for rendering to prevent concurrent
     // access from inside FFmpeg's decoding code
     if (m_DecodeDevice == m_RenderDevice) {
@@ -801,6 +885,210 @@ void D3D11VARenderer::renderFrame(AVFrame* frame)
         queueRenderDeviceReset();
         return;
     }
+}
+
+void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
+{
+    // Acquire the context lock for rendering to prevent concurrent
+    // access from inside FFmpeg's decoding code. It is released while
+    // waiting to show the decoded frame.
+    const bool sharedContext = m_DecodeDevice == m_RenderDevice;
+    const UINT presentFlags = m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
+    const float clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    ComPtr<IDXGIOutput> output;
+    bool interpolated = false;
+    bool fenceSignalled = false;
+    uint64_t presentUs = 0;
+    HRESULT hr = S_OK;
+
+    if (sharedContext) {
+        lockContext(this);
+    }
+
+    ID3D11RenderTargetView* frameTarget = m_FrameInterpolator->beginFrame(frame->width, frame->height);
+    if (frameTarget == nullptr || m_RenderTargetView == nullptr || m_SwapChain == nullptr) {
+        hr = E_FAIL;
+    }
+    else {
+        // Convert the decoded frame to RGB at the video resolution
+        D3D11_VIEWPORT videoViewport = {};
+        videoViewport.Width = (float)frame->width;
+        videoViewport.Height = (float)frame->height;
+        videoViewport.MaxDepth = 1;
+        m_RenderDeviceContext->RSSetViewports(1, &videoViewport);
+        m_RenderDeviceContext->OMSetRenderTargets(1, &frameTarget, nullptr);
+        renderVideo(frame, true);
+
+        // Unbind the converted frame so the interpolator can read it
+        setDisplayViewport();
+        m_RenderDeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), nullptr);
+
+        updateSwapChainColorSpace(frame);
+        m_FiDecodedFrames++;
+
+        if (m_FrameInterpolator->analyzeFrame()) {
+            m_RenderDeviceContext->ClearRenderTargetView(m_RenderTargetView.Get(), clearColor);
+            bindFrameInterpolationVertexBuffer(frame, false);
+            m_FrameInterpolator->drawInterpolated();
+            for (int i = 0; i < Overlay::OverlayMax; i++) {
+                renderOverlay((Overlay::OverlayType)i);
+            }
+
+            if (m_FiFence) {
+                fenceSignalled = SUCCEEDED(m_RenderDeviceContext->Signal(m_FiFence.Get(), ++m_FiFenceValue));
+            }
+
+            hr = presentPreparedFrame(presentFlags);
+            presentUs = LiGetMicroseconds();
+            if (SUCCEEDED(hr)) {
+                interpolated = true;
+                m_FiInterpolatedFrames++;
+
+                // With V-sync, we wait for the vertical blank of the output showing the window
+                if (!m_AllowTearing) {
+                    m_SwapChain->GetContainingOutput(&output);
+                }
+            }
+        }
+    }
+
+    if (sharedContext) {
+        unlockContext(this);
+    }
+
+    if (interpolated) {
+        waitForInterpolatedFrame(output.Get(), fenceSignalled, presentUs);
+    }
+
+    if (SUCCEEDED(hr)) {
+        if (sharedContext) {
+            lockContext(this);
+        }
+
+        // The window may have been resized while we were waiting
+        if (m_RenderTargetView != nullptr) {
+            m_RenderDeviceContext->ClearRenderTargetView(m_RenderTargetView.Get(), clearColor);
+            m_RenderDeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), nullptr);
+            bindFrameInterpolationVertexBuffer(frame, false);
+            m_FrameInterpolator->drawCurrent();
+            for (int i = 0; i < Overlay::OverlayMax; i++) {
+                renderOverlay((Overlay::OverlayType)i);
+            }
+
+            hr = presentPreparedFrame(presentFlags);
+        }
+        else {
+            hr = E_FAIL;
+        }
+
+        if (sharedContext) {
+            unlockContext(this);
+        }
+    }
+
+    if (FAILED(hr)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Frame interpolation rendering failed: %x",
+                     hr);
+
+        // The card may have been removed or crashed. Reset the decoder.
+        queueRenderDeviceReset();
+    }
+}
+
+void D3D11VARenderer::waitForInterpolatedFrame(IDXGIOutput* output, bool fenceSignalled, uint64_t presentUs)
+{
+    // Nothing can be shown before the GPU is done drawing it
+    if (fenceSignalled && SUCCEEDED(m_FiFence->SetEventOnCompletion(m_FiFenceValue, m_FiFenceEvent))) {
+        WaitForSingleObject(m_FiFenceEvent, 50);
+    }
+
+    // With V-sync, the interpolated frame is picked up at the next vertical
+    // blank, so the decoded frame is presented right after it for the next one.
+    if (output != nullptr && SUCCEEDED(output->WaitForVBlank())) {
+        return;
+    }
+
+    // Otherwise, show the decoded frame half a stream frame after the interpolated one
+    int64_t remainingUs = (int64_t)(presentUs + 500000 / m_DecoderParams.frameRate) - (int64_t)LiGetMicroseconds();
+    if (remainingUs <= 0) {
+        return;
+    }
+
+    if (m_FiTimer != nullptr) {
+        LARGE_INTEGER dueTime;
+        dueTime.QuadPart = -remainingUs * 10; // Relative, in 100 ns units
+        if (SetWaitableTimer(m_FiTimer, &dueTime, 0, nullptr, nullptr, FALSE)) {
+            WaitForSingleObject(m_FiTimer, 100);
+            return;
+        }
+    }
+
+    SDL_Delay((Uint32)((remainingUs + 999) / 1000));
+}
+
+void D3D11VARenderer::bindFrameInterpolationVertexBuffer(AVFrame* frame, bool convert)
+{
+    ComPtr<ID3D11Buffer>& vertexBuffer = convert ? m_FiConvertVertexBuffer : m_FiDisplayVertexBuffer;
+
+    if (!vertexBuffer) {
+        SDL_FRect renderRect;
+        float uMax, vMax;
+
+        if (convert) {
+            // Fill the whole conversion target, but don't sample from the alignment padding area
+            auto framesContext = (AVHWFramesContext*)frame->hw_frames_ctx->data;
+            renderRect = { -1.0f, -1.0f, 2.0f, 2.0f };
+            uMax = (float)frame->width / framesContext->width;
+            vMax = (float)frame->height / framesContext->height;
+        }
+        else {
+            // Scale video to the window size while preserving aspect ratio
+            SDL_Rect src, dst;
+            src.x = src.y = 0;
+            src.w = frame->width;
+            src.h = frame->height;
+            dst.x = dst.y = 0;
+            dst.w = m_DisplayWidth;
+            dst.h = m_DisplayHeight;
+            StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+            StreamUtils::screenSpaceToNormalizedDeviceCoords(&dst, &renderRect, m_DisplayWidth, m_DisplayHeight);
+
+            // The converted frames have no padding
+            uMax = vMax = 1.0f;
+        }
+
+        VERTEX verts[] =
+        {
+            {renderRect.x, renderRect.y, 0, vMax},
+            {renderRect.x, renderRect.y+renderRect.h, 0, 0},
+            {renderRect.x+renderRect.w, renderRect.y, uMax, vMax},
+            {renderRect.x+renderRect.w, renderRect.y+renderRect.h, uMax, 0},
+        };
+
+        D3D11_BUFFER_DESC vbDesc = {};
+        vbDesc.ByteWidth = sizeof(verts);
+        vbDesc.Usage = D3D11_USAGE_IMMUTABLE;
+        vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        vbDesc.CPUAccessFlags = 0;
+        vbDesc.MiscFlags = 0;
+        vbDesc.StructureByteStride = sizeof(VERTEX);
+
+        D3D11_SUBRESOURCE_DATA vbData = {};
+        vbData.pSysMem = verts;
+
+        HRESULT hr = m_RenderDevice->CreateBuffer(&vbDesc, &vbData, &vertexBuffer);
+        if (FAILED(hr)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "ID3D11Device::CreateBuffer() failed: %x",
+                         hr);
+            return;
+        }
+    }
+
+    UINT stride = sizeof(VERTEX);
+    UINT offset = 0;
+    m_RenderDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
 }
 
 void D3D11VARenderer::renderOverlay(Overlay::OverlayType type)
@@ -978,7 +1266,7 @@ void D3D11VARenderer::bindColorConversion(bool frameChanged, AVFrame* frame)
     }
 }
 
-void D3D11VARenderer::renderVideo(AVFrame* frame)
+void D3D11VARenderer::renderVideo(AVFrame* frame, bool toFrameInterpolator)
 {
     // Insert a fence to force the render context to wait for the decode context to finish writing
     if (m_DecodeDevice != m_RenderDevice) {
@@ -1025,7 +1313,16 @@ void D3D11VARenderer::renderVideo(AVFrame* frame)
     bool frameChanged = hasFrameFormatChanged(frame);
 
     // Bind our vertex buffer
-    bindVideoVertexBuffer(frameChanged, frame);
+    if (toFrameInterpolator) {
+        if (frameChanged) {
+            m_FiConvertVertexBuffer.Reset();
+            m_FiDisplayVertexBuffer.Reset();
+        }
+        bindFrameInterpolationVertexBuffer(frame, true);
+    }
+    else {
+        bindVideoVertexBuffer(frameChanged, frame);
+    }
 
     // Bind our CSC shader (and constant buffer, if required)
     bindColorConversion(frameChanged, frame);
@@ -1249,6 +1546,7 @@ bool D3D11VARenderer::notifyWindowChanged(PWINDOW_STATE_CHANGE_INFO stateInfo)
 
         // Release the video vertex buffer so we will upload a new one after resize
         m_VideoVertexBuffer.Reset();
+        m_FiDisplayVertexBuffer.Reset();
 
         // Create new vertex buffers for active overlays
         SDL_AtomicLock(&m_OverlayLock);
@@ -1695,6 +1993,13 @@ bool D3D11VARenderer::prepareFrameForPresent(AVFrame* frame)
         renderOverlay((Overlay::OverlayType)i);
     }
 
+    updateSwapChainColorSpace(frame);
+
+    return true;
+}
+
+void D3D11VARenderer::updateSwapChainColorSpace(AVFrame* frame)
+{
     if (frame->color_trc != m_LastColorTrc) {
         HRESULT hr;
         if (frame->color_trc == AVCOL_TRC_SMPTE2084) {
@@ -1716,8 +2021,6 @@ bool D3D11VARenderer::prepareFrameForPresent(AVFrame* frame)
 
         m_LastColorTrc = frame->color_trc;
     }
-
-    return true;
 }
 
 bool D3D11VARenderer::initializeVrrPresentReadyFence()
@@ -2165,21 +2468,24 @@ bool D3D11VARenderer::setupSwapchainDependentResources()
         }
     }
 
-    // Set a viewport that fills the window
-    {
-        D3D11_VIEWPORT viewport;
-
-        viewport.TopLeftX = 0;
-        viewport.TopLeftY = 0;
-        viewport.Width = m_DisplayWidth;
-        viewport.Height = m_DisplayHeight;
-        viewport.MinDepth = 0;
-        viewport.MaxDepth = 1;
-
-        m_RenderDeviceContext->RSSetViewports(1, &viewport);
-    }
+    setDisplayViewport();
 
     return true;
+}
+
+void D3D11VARenderer::setDisplayViewport()
+{
+    // Set a viewport that fills the window
+    D3D11_VIEWPORT viewport;
+
+    viewport.TopLeftX = 0;
+    viewport.TopLeftY = 0;
+    viewport.Width = m_DisplayWidth;
+    viewport.Height = m_DisplayHeight;
+    viewport.MinDepth = 0;
+    viewport.MaxDepth = 1;
+
+    m_RenderDeviceContext->RSSetViewports(1, &viewport);
 }
 
 // NB: This can be called more than once (and with different frame dimensions!)
