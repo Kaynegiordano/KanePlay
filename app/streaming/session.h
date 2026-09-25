@@ -105,6 +105,12 @@ public:
     Q_INVOKABLE bool initialize(QQuickWindow* qtWindow);
     Q_INVOKABLE void start();
     Q_INVOKABLE void interrupt();
+
+    // True when the stream was running and ended because of the network,
+    // so starting it again is likely to work
+    Q_INVOKABLE bool isReconnectable() const { return m_Reconnectable; }
+
+    bool isBatterySaverActive() const { return m_BatterySaverActive; }
     Q_PROPERTY(QStringList launchWarnings MEMBER m_LaunchWarnings NOTIFY launchWarningsChanged);
 
     static
@@ -308,6 +314,9 @@ private:
     Overlay::OverlayManager m_OverlayManager;
 
     StreamHealthMonitor* m_StreamHealthMonitor;
+    bool m_StreamStarted;
+    bool m_Reconnectable;
+    bool m_BatterySaverActive;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;

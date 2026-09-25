@@ -2,6 +2,9 @@
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
 #include "streaming/vrrratepolicy.h"
+
+// Frame rate cap of the battery saver
+#define BATTERY_SAVER_MAX_FPS 60
 #include "backend/richpresencemanager.h"
 
 #include <Limelight.h>
@@ -110,6 +113,7 @@ void Session::clConnectionTerminated(int errorCode)
 
     case ML_ERROR_NO_VIDEO_FRAME:
         s_ActiveSession->m_UnexpectedTermination = true;
+        s_ActiveSession->m_Reconnectable = s_ActiveSession->m_StreamStarted;
         emit s_ActiveSession->displayLaunchError(tr("Your network connection isn't performing well. Reduce your video bitrate setting or try a faster connection."));
         break;
 
@@ -128,6 +132,7 @@ void Session::clConnectionTerminated(int errorCode)
 
     default:
         s_ActiveSession->m_UnexpectedTermination = true;
+        s_ActiveSession->m_Reconnectable = s_ActiveSession->m_StreamStarted;
 
         // We'll assume large errors are hex values
         bool hexError = qAbs(errorCode) > 1000;
@@ -195,8 +200,7 @@ void Session::clConnectionStatusUpdate(int connectionStatus)
     {
     case CONN_STATUS_POOR:
         s_ActiveSession->m_OverlayManager.updateOverlayText(Overlay::OverlayStatusUpdate,
-                                                            s_ActiveSession->m_StreamConfig.bitrate > 5000 ?
-                                                                "Slow connection to PC\nReduce your bitrate" : "Poor connection to PC");
+                                                            tr("Unstable connection to the PC").toUtf8().constData());
         s_ActiveSession->m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, true);
         break;
     case CONN_STATUS_OKAY:
@@ -605,7 +609,10 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_AudioRenderer(nullptr),
       m_AudioSampleCount(0),
       m_DropAudioEndTime(0),
-      m_StreamHealthMonitor(nullptr)
+      m_StreamHealthMonitor(nullptr),
+      m_StreamStarted(false),
+      m_Reconnectable(false),
+      m_BatterySaverActive(false)
 {
 }
 
@@ -689,6 +696,20 @@ bool Session::initialize(QQuickWindow* qtWindow)
     // Replace the saved resolution and/or frame rate with the client display's
     // own values if the user asked us to match it automatically
     overrideStreamConfigForClientDisplay(testWindow);
+
+    // On battery, trade some smoothness and quality for a longer battery life
+    if (m_Preferences->batterySaver) {
+        int secondsLeft, percentLeft;
+        if (SDL_GetPowerInfo(&secondsLeft, &percentLeft) == SDL_POWERSTATE_ON_BATTERY) {
+            m_BatterySaverActive = true;
+            if (m_StreamConfig.fps > BATTERY_SAVER_MAX_FPS) {
+                m_StreamConfig.fps = BATTERY_SAVER_MAX_FPS;
+            }
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Battery saver: on battery (%d%%), streaming at %d FPS",
+                        percentLeft, m_StreamConfig.fps);
+        }
+    }
 
 #ifdef Q_OS_DARWIN
     if (qEnvironmentVariableIntValue("I_WANT_BUGGY_FULLSCREEN") == 0) {
@@ -1983,8 +2004,23 @@ bool Session::startConnectionAsync()
         }
     }
 
+    if (m_BatterySaverActive) {
+        int batteryBitrate = StreamingPreferences::getDefaultBitrate(m_StreamConfig.width,
+                                                                     m_StreamConfig.height,
+                                                                     m_StreamConfig.fps,
+                                                                     false,
+                                                                     predictNegotiatedVideoFormat());
+        if (m_StreamConfig.bitrate > batteryBitrate) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Battery saver: bitrate capped at %d kbps",
+                        batteryBitrate);
+            m_StreamConfig.bitrate = batteryBitrate;
+        }
+    }
+
     delete m_StreamHealthMonitor;
-    m_StreamHealthMonitor = new StreamHealthMonitor(m_StreamConfig.bitrate,
+    m_StreamHealthMonitor = new StreamHealthMonitor(m_Computer->uuid,
+                                                    m_StreamConfig.bitrate,
                                                     learnedFactor,
                                                     learnedBitrateKey,
                                                     m_Preferences->logStreamStats,
@@ -2005,6 +2041,7 @@ bool Session::startConnectionAsync()
         return false;
     }
 
+    m_StreamStarted = true;
     emit connectionStarted();
     return true;
 }

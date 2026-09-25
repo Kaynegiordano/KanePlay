@@ -165,6 +165,12 @@ int SystemProperties::getRefreshRate(int displayIndex)
     return monitorRefreshRates.value(displayIndex);
 }
 
+bool SystemProperties::isOnBattery()
+{
+    int secondsLeft, percentLeft;
+    return SDL_GetPowerInfo(&secondsLeft, &percentLeft) == SDL_POWERSTATE_ON_BATTERY;
+}
+
 int SystemProperties::getDisplayIndexForOrigin(int virtualX, int virtualY)
 {
     // Returns -1 if no display starts at these virtual desktop coordinates

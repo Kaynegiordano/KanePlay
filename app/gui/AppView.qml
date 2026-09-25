@@ -7,6 +7,7 @@ import AppModel 1.0
 import ComputerManager 1.0
 import StreamingPreferences 1.0
 import SdlGamepadKeyNavigation 1.0
+import SystemProperties 1.0
 
 // App library of one PC: the selected app is shown large at the top,
 // and the apps are browsed in a horizontal carousel below it.
@@ -24,6 +25,56 @@ FocusScope {
     readonly property var selectedApp: carousel.currentItem
     readonly property bool compact: height < 640
 
+    // Summary of the last stream from this PC, see StreamHealthMonitor
+    property var lastSession: ({})
+    property bool onBattery: false
+
+    function refreshStatus()
+    {
+        lastSession = StreamingPreferences.getLastSession(appModel.getComputerUuid())
+        onBattery = SystemProperties.isOnBattery()
+    }
+
+    function formatTimeAgo(date)
+    {
+        var minutes = Math.floor((Date.now() - date.getTime()) / 60000)
+        if (minutes < 1) {
+            return qsTr("just now")
+        }
+        else if (minutes < 60) {
+            return qsTr("%1 min ago").arg(minutes)
+        }
+        else if (minutes < 24 * 60) {
+            return qsTr("%1 h ago").arg(Math.floor(minutes / 60))
+        }
+        return qsTr("%1 days ago").arg(Math.floor(minutes / (24 * 60)))
+    }
+
+    function lastSessionText()
+    {
+        if (!lastSession || !lastSession.endTime) {
+            return ""
+        }
+
+        var minutes = Math.max(1, Math.round(lastSession.durationSecs / 60))
+        var text = qsTr("Last session: %1, %2 min, %3% of frames lost")
+                     .arg(formatTimeAgo(lastSession.endTime))
+                     .arg(minutes)
+                     .arg(Number(lastSession.lossPercent).toFixed(1))
+        if (lastSession.learnedPercent < 100) {
+            text += " · " + qsTr("next stream at %1% of the bitrate").arg(lastSession.learnedPercent)
+        }
+        return text
+    }
+
+    // Unplugging the charger switches the battery saver on, so keep an eye on it
+    Timer {
+        interval: 30000
+        running: activated
+        repeat: true
+        onTriggered: onBattery = SystemProperties.isOnBattery()
+    }
+
     id: appView
     focus: true
 
@@ -36,6 +87,7 @@ FocusScope {
     StackView.onActivated: {
         appModel.computerLost.connect(computerLost)
         activated = true
+        refreshStatus()
 
         carousel.forceActiveFocus()
 
@@ -79,6 +131,9 @@ FocusScope {
         }
         if (StreamingPreferences.enableHdr) {
             parts.push("HDR")
+        }
+        if (StreamingPreferences.batterySaver && onBattery) {
+            parts.push(qsTr("Battery saver"))
         }
         return parts
     }
@@ -184,6 +239,16 @@ FocusScope {
                     }
                 }
             }
+        }
+
+        Text {
+            width: parent.width
+            visible: text !== ""
+            text: lastSessionText()
+            font.family: Theme.textFont
+            font.pointSize: 10
+            color: Theme.textSecondary
+            elide: Text.ElideRight
         }
 
         Row {
@@ -475,11 +540,14 @@ FocusScope {
                         return
                     }
 
+                    var appIndex = index
                     var component = Qt.createComponent("StreamSegue.qml")
                     var segue = component.createObject(stackView, {
                                                            "appName": model.name,
                                                            "session": appModel.createSessionForApp(index),
-                                                           "isResume": runningId === model.appid
+                                                           "isResume": runningId === model.appid,
+                                                           // Lets the segue start the same app again after a network drop
+                                                           "createSession": function() { return appModel.createSessionForApp(appIndex) }
                                                        })
                     stackView.push(segue)
                 }

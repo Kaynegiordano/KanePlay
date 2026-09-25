@@ -4,6 +4,7 @@ import QtQuick.Window 2.2
 
 import SdlGamepadKeyNavigation 1.0
 import Session 1.0
+import StreamingPreferences 1.0
 import SystemProperties 1.0
 
 Item {
@@ -13,6 +14,18 @@ Item {
                                            qsTr("Starting %1...").arg(appName)
     property bool isResume : false
     property bool quitAfter : false
+
+    // Creates a new Session for the same app, used to reconnect after a network drop.
+    // Streams started without it (command line, after quitting another app) don't reconnect.
+    property var createSession: null
+    property int reconnectAttempt: 0
+    property bool reconnecting: false
+    readonly property int maxReconnectAttempts: 3
+    // A stream that ran this long starts counting reconnection attempts from scratch
+    readonly property int stableStreamMs: 60000
+    property double streamStartTime: 0
+
+    id: streamSegue
 
     function stageStarting(stage)
     {
@@ -34,9 +47,10 @@ Item {
     {
         // Hide the UI contents so the user doesn't
         // see them briefly when we pop off the StackView
-        stageSpinner.visible = false
-        stageLabel.visible = false
+        content.visible = false
         hintText.visible = false
+
+        streamStartTime = Date.now()
 
         // Hide the window now that streaming has begun
         window.visible = false
@@ -59,8 +73,35 @@ Item {
         window.visible = true
     }
 
+    function shouldReconnect()
+    {
+        if (quitAfter || createSession === null || !StreamingPreferences.autoReconnect ||
+                session === null || !session.isReconnectable()) {
+            return false
+        }
+
+        // A stream that worked for a while gets a fresh set of attempts
+        if (streamStartTime !== 0 && Date.now() - streamStartTime > stableStreamMs) {
+            reconnectAttempt = 0
+        }
+
+        return reconnectAttempt < maxReconnectAttempts
+    }
+
     function sessionFinished(portTestResult)
     {
+        if (shouldReconnect()) {
+            // Reconnect once the old session is fully cleaned up (see sessionReadyForDeletion)
+            reconnecting = true
+            reconnectAttempt++
+            streamSegueErrorDialog.text = ""
+            stageText = qsTr("Connection lost. Reconnecting (%1/%2)...").arg(reconnectAttempt).arg(maxReconnectAttempts)
+            content.visible = true
+            hintText.visible = false
+            window.visible = true
+            return
+        }
+
         if (portTestResult !== 0 && portTestResult !== -1 && streamSegueErrorDialog.text) {
             streamSegueErrorDialog.text += "\n\n" + qsTr("This PC's Internet connection is blocking Moonlight. Streaming over the Internet may not work while connected to this network.")
         }
@@ -98,6 +139,21 @@ Item {
         // and keeps other libraries (like SDL_TTF) around until it is deleted.
         session = null
         gc()
+
+        if (reconnecting) {
+            reconnectTimer.start()
+        }
+    }
+
+    function connectSession()
+    {
+        session.stageStarting.connect(stageStarting)
+        session.stageFailed.connect(stageFailed)
+        session.connectionStarted.connect(connectionStarted)
+        session.displayLaunchError.connect(displayLaunchError)
+        session.quitStarting.connect(quitStarting)
+        session.sessionFinished.connect(sessionFinished)
+        session.readyForDeletion.connect(sessionReadyForDeletion)
     }
 
     StackView.onDeactivating: {
@@ -113,13 +169,7 @@ Item {
         toolBar.visible = false
 
         // Hook up our signals
-        session.stageStarting.connect(stageStarting)
-        session.stageFailed.connect(stageFailed)
-        session.connectionStarted.connect(connectionStarted)
-        session.displayLaunchError.connect(displayLaunchError)
-        session.quitStarting.connect(quitStarting)
-        session.sessionFinished.connect(sessionFinished)
-        session.readyForDeletion.connect(sessionReadyForDeletion)
+        connectSession()
 
         // Ensure the SystemProperties async thread is finished,
         // since it may currently be using the SDL video subsystem
@@ -127,6 +177,22 @@ Item {
 
         // Kick off the stream
         streamLoader.active = true
+    }
+
+    // Leave the network a moment to recover before trying again
+    Timer {
+        id: reconnectTimer
+        interval: 2000
+        onTriggered: {
+            reconnecting = false
+            isResume = true
+            session = createSession()
+            connectSession()
+
+            // Run the same startup sequence again
+            streamLoader.active = false
+            streamLoader.active = true
+        }
     }
 
     Timer {
@@ -154,6 +220,7 @@ Item {
             // gamepad usage.
             hintText.text = qsTr("Tip:") + " " + qsTr("Press %1 to disconnect your session").arg(SdlGamepadKeyNavigation.getConnectedGamepads() > 0 ?
                                                   qsTr("Start+Select+L1+R1") : qsTr("Ctrl+Alt+Shift+Q"))
+            hintText.visible = true
 
             // Stop GUI gamepad usage now
             SdlGamepadKeyNavigation.disable()
@@ -200,35 +267,70 @@ Item {
         sourceComponent: Item {}
     }
 
-    Row {
-        anchors.centerIn: parent
-        spacing: 5
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.background
+    }
 
-        BusyIndicator {
-            id: stageSpinner
-            running: visible
-            visible: false
+    Column {
+        id: content
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 2 * Theme.pagePadding, 900)
+        spacing: 18
+
+        Image {
+            source: "qrc:/res/moon.svg"
+            sourceSize.width: 56
+            sourceSize.height: 56
+            anchors.horizontalCenter: parent.horizontalCenter
         }
 
-        Label {
-            id: stageLabel
-            height: stageSpinner.height
-            text: stageText
-            font.pointSize: 20
-            verticalAlignment: Text.AlignVCenter
+        Text {
+            width: parent.width
+            text: appName
+            font.family: Theme.displayFont
+            font.pointSize: 34
+            font.weight: Font.Black
+            color: Theme.text
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+        }
 
-            wrapMode: Text.Wrap
+        Row {
+            spacing: 14
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            BusyIndicator {
+                id: stageSpinner
+                running: visible
+                visible: false
+                implicitWidth: 40
+                implicitHeight: 40
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Text {
+                id: stageLabel
+                text: stageText
+                font.family: Theme.textFont
+                font.pointSize: 15
+                color: reconnecting || reconnectAttempt > 0 ? Theme.warning : Theme.textSecondary
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
 
-    Label {
+    Text {
         id: hintText
+        visible: false
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 50
+        anchors.bottomMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter
-        font.pointSize: 18
-        verticalAlignment: Text.AlignVCenter
-
+        width: parent.width - 2 * Theme.pagePadding
+        font.family: Theme.textFont
+        font.pointSize: 13
+        color: Theme.textTertiary
+        horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.Wrap
     }
 }

@@ -33,6 +33,8 @@ public:
 
     Q_INVOKABLE int getRunningAppId();
 
+    Q_INVOKABLE QString getComputerUuid();
+
     Q_INVOKABLE QString getRunningAppName();
 
     Q_INVOKABLE void quitRunningApp();

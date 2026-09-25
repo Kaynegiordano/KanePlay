@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QRect>
 #include <QQmlEngine>
+#include <QVariantMap>
 #include <QVariantList>
 
 class StreamingPreferences : public QObject
@@ -30,6 +31,11 @@ public:
 
     // Forget the bitrates learned for each host
     Q_INVOKABLE static void resetLearnedBitrates();
+
+    // Summary of the last stream from a host (empty if none):
+    // endTime (QDateTime), durationSecs, lossPercent, learnedPercent
+    Q_INVOKABLE static QVariantMap getLastSession(const QString& hostUuid);
+    static void setLastSession(const QString& hostUuid, const QVariantMap& summary);
 
     void reload();
 
@@ -145,6 +151,8 @@ public:
     Q_PROPERTY(bool unlockBitrate MEMBER unlockBitrate NOTIFY unlockBitrateChanged)
     Q_PROPERTY(bool autoAdjustBitrate MEMBER autoAdjustBitrate NOTIFY autoAdjustBitrateChanged)
     Q_PROPERTY(bool learnBitrate MEMBER learnBitrate NOTIFY learnBitrateChanged)
+    Q_PROPERTY(bool autoReconnect MEMBER autoReconnect NOTIFY autoReconnectChanged)
+    Q_PROPERTY(bool batterySaver MEMBER batterySaver NOTIFY batterySaverChanged)
     Q_PROPERTY(bool autoFramePacing MEMBER autoFramePacing NOTIFY framePacingChanged)
     Q_PROPERTY(bool logStreamStats MEMBER logStreamStats NOTIFY logStreamStatsChanged)
     Q_PROPERTY(bool enableVsync MEMBER enableVsync NOTIFY enableVsyncChanged)
@@ -202,6 +210,8 @@ public:
     bool unlockBitrate;
     bool autoAdjustBitrate;
     bool learnBitrate;
+    bool autoReconnect;
+    bool batterySaver;
     bool autoFramePacing;
     bool logStreamStats;
     bool enableVsync;
@@ -247,6 +257,8 @@ signals:
     void unlockBitrateChanged();
     void autoAdjustBitrateChanged();
     void learnBitrateChanged();
+    void autoReconnectChanged();
+    void batterySaverChanged();
     void logStreamStatsChanged();
     void enableVsyncChanged();
     void enableVrrChanged();

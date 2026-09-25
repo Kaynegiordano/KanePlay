@@ -26,6 +26,11 @@ int AppModel::getRunningAppId()
     return m_CurrentGameId;
 }
 
+QString AppModel::getComputerUuid()
+{
+    return m_Computer != nullptr ? m_Computer->uuid : QString();
+}
+
 QString AppModel::getRunningAppName()
 {
     if (m_CurrentGameId != 0) {

@@ -28,9 +28,10 @@
 // Never go below this share of the configured bitrate
 #define MIN_LEARNED_FACTOR 0.30
 
-StreamHealthMonitor::StreamHealthMonitor(int bitrateKbps, double learnedFactor, const QString& learnedBitrateKey,
+StreamHealthMonitor::StreamHealthMonitor(const QString& hostUuid, int bitrateKbps, double learnedFactor, const QString& learnedBitrateKey,
                                          bool logStats, int width, int height, int fps)
-    : m_BitrateKbps(bitrateKbps),
+    : m_HostUuid(hostUuid),
+      m_BitrateKbps(bitrateKbps),
       m_LearnedFactor(learnedFactor),
       m_LearnedBitrateKey(learnedBitrateKey),
       m_PoorStatusSeen(false),
@@ -150,17 +151,34 @@ void StreamHealthMonitor::onStatsWindow(const VIDEO_STATS& window, int videoForm
     m_CsvFile.flush();
 }
 
+// Sessions shorter than this aren't worth showing as the last session
+#define MIN_SUMMARY_WINDOWS 10
+
 void StreamHealthMonitor::finishSession()
 {
-    if (m_LearnedBitrateKey.isEmpty()) {
-        return;
+    double newFactor = m_LearnedFactor;
+
+    if (!m_LearnedBitrateKey.isEmpty()) {
+        newFactor = updateLearnedBitrate();
     }
 
+    if (m_Windows >= MIN_SUMMARY_WINDOWS && m_TotalFrames != 0 && !m_HostUuid.isEmpty()) {
+        QVariantMap summary;
+        summary["endTime"] = QDateTime::currentDateTime();
+        summary["durationSecs"] = (qulonglong)m_Windows;
+        summary["lossPercent"] = (double)m_DroppedFrames / m_TotalFrames * 100.0;
+        summary["learnedPercent"] = qRound(newFactor * 100);
+        StreamingPreferences::setLastSession(m_HostUuid, summary);
+    }
+}
+
+double StreamHealthMonitor::updateLearnedBitrate()
+{
     if (m_Windows < MIN_LEARNING_WINDOWS || m_TotalFrames == 0) {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Learned bitrate: session too short to learn from (%llu s)",
                     (unsigned long long)m_Windows);
-        return;
+        return m_LearnedFactor;
     }
 
     double lossPercent = (double)m_DroppedFrames / m_TotalFrames * 100.0;
@@ -187,4 +205,5 @@ void StreamHealthMonitor::finishSession()
                 (unsigned long long)m_Windows);
 
     StreamingPreferences::setLearnedBitrateFactor(m_LearnedBitrateKey, newFactor);
+    return newFactor;
 }

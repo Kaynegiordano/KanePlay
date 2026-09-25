@@ -1012,6 +1012,40 @@ Item {
                         ToolTip.text: qsTr("After each stream, Moonlight checks how many frames were lost. If the network couldn't keep up, the next stream to this PC starts with a lower bitrate. After clean streams, the bitrate slowly goes back up to the one chosen above.") + "\n\n" +
                                       qsTr("Turning this off forgets what was learned.")
                     }
+                    CheckBox {
+                        id: autoReconnectCheck
+                        width: parent.width
+                        hoverEnabled: true
+                        text: qsTr("Reconnect automatically")
+                        font.pointSize: 12
+                        checked: StreamingPreferences.autoReconnect
+                        onCheckedChanged: {
+                            StreamingPreferences.autoReconnect = checked
+                        }
+
+                        ToolTip.delay: 1000
+                        ToolTip.timeout: 8000
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("If the network drops during a stream, start the same game again right away, up to 3 times, instead of going back to the library.")
+                    }
+
+                    CheckBox {
+                        id: batterySaverCheck
+                        width: parent.width
+                        hoverEnabled: true
+                        text: qsTr("Save battery when unplugged")
+                        font.pointSize: 12
+                        checked: StreamingPreferences.batterySaver
+                        onCheckedChanged: {
+                            StreamingPreferences.batterySaver = checked
+                        }
+
+                        ToolTip.delay: 1000
+                        ToolTip.timeout: 8000
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("While running on battery, streams are limited to 60 FPS and to the default bitrate for 60 FPS. Plugging the charger back in restores your settings at the next stream.")
+                    }
+
 
                     Label {
                         width: parent.width

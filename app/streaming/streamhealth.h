@@ -15,7 +15,7 @@ class StreamHealthMonitor
 {
 public:
     // An empty learnedBitrateKey disables bitrate learning for this session
-    StreamHealthMonitor(int bitrateKbps, double learnedFactor, const QString& learnedBitrateKey,
+    StreamHealthMonitor(const QString& hostUuid, int bitrateKbps, double learnedFactor, const QString& learnedBitrateKey,
                         bool logStats, int width, int height, int fps);
     ~StreamHealthMonitor();
 
@@ -27,7 +27,7 @@ public:
     // Called by moonlight-common-c on its own thread
     void onConnectionStatus(int connectionStatus);
 
-    // Called once the stream is over to update the bitrate learned for this host
+    // Called once the stream is over to save its summary and update the bitrate learned for this host
     void finishSession();
 
     // Share of the configured bitrate used for this session
@@ -36,6 +36,10 @@ public:
 private:
     void openCsv(int width, int height, int fps);
 
+    // Returns the new share of the configured bitrate to use next time
+    double updateLearnedBitrate();
+
+    const QString m_HostUuid;
     const int m_BitrateKbps;
     const double m_LearnedFactor;
     const QString m_LearnedBitrateKey;

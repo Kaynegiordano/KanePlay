@@ -32,6 +32,9 @@
 #define SER_LEARNBITRATE "learnbitrate"
 #define SER_AUTOFRAMEPACING "autoframepacing"
 #define SER_LEARNEDBITRATES "learnedbitrates"
+#define SER_LASTSESSIONS "lastsessions"
+#define SER_AUTORECONNECT "autoreconnect"
+#define SER_BATTERYSAVER "batterysaver"
 #define SER_LOGSTREAMSTATS "logstreamstats"
 #define SER_FULLSCREEN "fullscreen"
 #define SER_VSYNC "vsync"
@@ -152,6 +155,8 @@ void StreamingPreferences::reload()
     autoAdjustBitrate = settings.value(SER_AUTOADJUSTBITRATE, true).toBool();
     learnBitrate = settings.value(SER_LEARNBITRATE, true).toBool();
     autoFramePacing = settings.value(SER_AUTOFRAMEPACING, true).toBool();
+    autoReconnect = settings.value(SER_AUTORECONNECT, true).toBool();
+    batterySaver = settings.value(SER_BATTERYSAVER, true).toBool();
     logStreamStats = settings.value(SER_LOGSTREAMSTATS, false).toBool();
     enableVsync = settings.value(SER_VSYNC, true).toBool();
     enableVrr = settings.value(SER_ENABLEVRR, false).toBool();
@@ -362,6 +367,8 @@ void StreamingPreferences::save()
     settings.setValue(SER_AUTOADJUSTBITRATE, autoAdjustBitrate);
     settings.setValue(SER_LEARNBITRATE, learnBitrate);
     settings.setValue(SER_AUTOFRAMEPACING, autoFramePacing);
+    settings.setValue(SER_AUTORECONNECT, autoReconnect);
+    settings.setValue(SER_BATTERYSAVER, batterySaver);
     settings.setValue(SER_LOGSTREAMSTATS, logStreamStats);
     settings.setValue(SER_VSYNC, enableVsync);
     settings.setValue(SER_ENABLEVRR, enableVrr);
@@ -536,6 +543,20 @@ void StreamingPreferences::setLearnedBitrateFactor(const QString& key, double fa
     else {
         settings.setValue(key, factor);
     }
+}
+
+QVariantMap StreamingPreferences::getLastSession(const QString& hostUuid)
+{
+    QSettings settings;
+    settings.beginGroup(SER_LASTSESSIONS);
+    return settings.value(hostUuid).toMap();
+}
+
+void StreamingPreferences::setLastSession(const QString& hostUuid, const QVariantMap& summary)
+{
+    QSettings settings;
+    settings.beginGroup(SER_LASTSESSIONS);
+    settings.setValue(hostUuid, summary);
 }
 
 void StreamingPreferences::resetLearnedBitrates()

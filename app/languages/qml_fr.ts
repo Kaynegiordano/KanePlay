@@ -87,6 +87,34 @@
         <source>RUNNING</source>
         <translation>EN COURS</translation>
     </message>
+    <message>
+        <source>just now</source>
+        <translation>à l&apos;instant</translation>
+    </message>
+    <message>
+        <source>%1 min ago</source>
+        <translation>il y a %1 min</translation>
+    </message>
+    <message>
+        <source>%1 h ago</source>
+        <translation>il y a %1 h</translation>
+    </message>
+    <message>
+        <source>%1 days ago</source>
+        <translation>il y a %1 jours</translation>
+    </message>
+    <message>
+        <source>Last session: %1, %2 min, %3% of frames lost</source>
+        <translation>Dernière session : %1, %2 min, %3 % d&apos;images perdues</translation>
+    </message>
+    <message>
+        <source>next stream at %1% of the bitrate</source>
+        <translation>prochain stream à %1 % du débit</translation>
+    </message>
+    <message>
+        <source>Battery saver</source>
+        <translation>Mode batterie</translation>
+    </message>
 </context>
 <context>
     <name>CliPair</name>
@@ -711,6 +739,10 @@
         <source>Unable to initialize video decoder. Please check your streaming settings and try again.</source>
         <translation>Impossible d&apos;initialiser le décodeur vidéo. Veuillez vérifier vos paramètres de streaming et réessayez.</translation>
     </message>
+    <message>
+        <source>Unstable connection to the PC</source>
+        <translation>Connexion instable avec le PC</translation>
+    </message>
 </context>
 <context>
     <name>SettingsView</name>
@@ -856,7 +888,7 @@
     <message>
         <location filename="../gui/SettingsView.qml" line="718"/>
         <source>Use Default (%1 Mbps)</source>
-        <translation>Utiliser la valuer par défaut (%1 Mbps)</translation>
+        <translation>Utiliser la valeur par défaut (%1 Mbps)</translation>
     </message>
     <message>
         <location filename="../gui/SettingsView.qml" line="753"/>
@@ -1356,6 +1388,22 @@
         <source>In exclusive fullscreen, Windows requires frames to be paced to the display, so this option only applies to borderless fullscreen and windowed modes.</source>
         <translation>En plein écran exclusif, Windows impose de caler les images sur l&apos;écran : cette option ne s&apos;applique donc qu&apos;en plein écran sans bordure et en mode fenêtré.</translation>
     </message>
+    <message>
+        <source>Reconnect automatically</source>
+        <translation>Reconnexion automatique</translation>
+    </message>
+    <message>
+        <source>If the network drops during a stream, start the same game again right away, up to 3 times, instead of going back to the library.</source>
+        <translation>Si le réseau coupe pendant un stream, relance aussitôt le même jeu, jusqu&apos;à 3 fois, au lieu de revenir à la bibliothèque.</translation>
+    </message>
+    <message>
+        <source>Save battery when unplugged</source>
+        <translation>Économiser la batterie hors secteur</translation>
+    </message>
+    <message>
+        <source>While running on battery, streams are limited to 60 FPS and to the default bitrate for 60 FPS. Plugging the charger back in restores your settings at the next stream.</source>
+        <translation>Sur batterie, les streams sont limités à 60 FPS et au débit par défaut pour 60 FPS. Rebrancher le chargeur rétablit tes réglages au stream suivant.</translation>
+    </message>
 </context>
 <context>
     <name>StreamSegue</name>
@@ -1404,6 +1452,10 @@
         <location filename="../gui/StreamSegue.qml" line="169"/>
         <source>Ctrl+Alt+Shift+Q</source>
         <translation>Ctrl + Alt + Maj + Q</translation>
+    </message>
+    <message>
+        <source>Connection lost. Reconnecting (%1/%2)...</source>
+        <translation>Connexion perdue. Reconnexion (%1/%2)...</translation>
     </message>
 </context>
 <context>
