@@ -313,6 +313,7 @@ bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
     params.enableVrr = enableVrr;
     params.vrrDisplayRefreshHz = vrrDisplayRefreshHz;
     params.enableFrameInterpolation = !testOnly && StreamingPreferences::get()->frameInterpolation;
+    params.allowAmdFrameInterpolation = params.enableFrameInterpolation && StreamingPreferences::get()->amdFrameInterpolation;
     params.testOnly = testOnly;
     params.vds = vds;
     params.renderer = renderer;
@@ -613,8 +614,29 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_StreamHealthMonitor(nullptr),
       m_StreamStarted(false),
       m_Reconnectable(false),
-      m_BatterySaverActive(false)
+      m_BatterySaverActive(false),
+      m_InGameMenu(this)
 {
+}
+
+int Session::getWindowPixelHeight()
+{
+    int width = 0, height = 0;
+    if (m_Window != nullptr) {
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+        SDL_GetWindowSizeInPixels(m_Window, &width, &height);
+#else
+        SDL_GetWindowSize(m_Window, &width, &height);
+#endif
+    }
+    return height > 0 ? height : 1080;
+}
+
+void Session::toggleGamepadMouse()
+{
+    if (m_InputHandler != nullptr) {
+        m_InputHandler->toggleGamepadMouseEmulation();
+    }
 }
 
 Session::~Session()
@@ -1074,7 +1096,7 @@ void Session::emitLaunchWarning(QString text)
 bool Session::validateLaunch(SDL_Window* testWindow)
 {
     if (!m_Computer->isSupportedServerVersion) {
-        emit displayLaunchError(tr("The version of GeForce Experience on %1 is not supported by this build of Moonlight. You must update Moonlight to stream from %1.").arg(m_Computer->name));
+        emit displayLaunchError(tr("The version of GeForce Experience on %1 is not supported by this build of KanePlay. You must update KanePlay to stream from %1.").arg(m_Computer->name));
         return false;
     }
 
@@ -1259,6 +1281,12 @@ bool Session::validateLaunch(SDL_Window* testWindow)
                                               m_StreamConfig.height,
                                               m_StreamConfig.fps) != DecoderAvailability::Hardware) {
                     if (m_Preferences->videoDecoderSelection == StreamingPreferences::VDS_FORCE_HARDWARE) {
+                        m_SupportedVideoFormats.removeFirst();
+                    }
+                    else if (m_Preferences->frameInterpolation) {
+                        // The frame doubler only works with hardware decoding, and software
+                        // decoding of 4:4:4 is too heavy for most handhelds anyway. The
+                        // warning below says 4:4:4 is off.
                         m_SupportedVideoFormats.removeFirst();
                     }
                     else {
@@ -2040,6 +2068,7 @@ bool Session::startConnectionAsync()
                                                     m_StreamConfig.width,
                                                     m_StreamConfig.height,
                                                     m_StreamConfig.fps);
+    m_StreamHealthMonitor->setApp(m_App.name, m_App.id);
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Video bitrate: %d kbps",
@@ -2186,7 +2215,7 @@ void Session::exec()
 #ifdef Q_OS_DARWIN
     std::string windowName = QString(m_Computer->name).toStdString();
 #else
-    std::string windowName = QString(m_Computer->name + " - Moonlight").toStdString();
+    std::string windowName = QString(m_Computer->name + " - KanePlay").toStdString();
 #endif
 
     m_Window = SDL_CreateWindow(windowName.c_str(),
@@ -2221,7 +2250,7 @@ void Session::exec()
 
     m_InputHandler->setWindow(m_Window);
 
-    QSvgRenderer svgIconRenderer(QString(":/res/moonlight.svg"));
+    QSvgRenderer svgIconRenderer(QString(":/res/kaneplay.svg"));
     QImage svgImage(ICON_SIZE, ICON_SIZE, QImage::Format_RGBA8888);
     svgImage.fill(0);
 
@@ -2392,6 +2421,10 @@ void Session::exec()
             case SDL_CODE_GAMECONTROLLER_SET_ADAPTIVE_TRIGGERS:
                 m_InputHandler->setAdaptiveTriggers((uint16_t)(uintptr_t)event.user.data1,
                                                     (DualSenseOutputReport *)event.user.data2);
+                break;
+            case SDL_CODE_GAMEPAD_COMBO_TIMEOUT:
+                m_InputHandler->handleGamepadComboTimeout((int)((uintptr_t)event.user.data1 >> 24),
+                                                          (uint32_t)((uintptr_t)event.user.data1 & 0xFFFFFF));
                 break;
             default:
                 SDL_assert(false);
@@ -2589,6 +2622,16 @@ void Session::exec()
                 if (displayHz + 5 < m_StreamConfig.fps) {
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                                 "Disabling V-sync because refresh rate limit exceeded");
+                    enableVsync = false;
+                }
+
+                // The frame doubler times the frames it adds itself. V-sync and
+                // frame pacing on top of it make the picture stutter and flicker,
+                // so they're off whenever the display can show the doubled rate.
+                if (enableVsync && m_Preferences->frameInterpolation &&
+                        displayHz * 10 >= m_StreamConfig.fps * 18) {
+                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                                "Disabling V-sync and frame pacing for the frame doubler");
                     enableVsync = false;
                 }
 

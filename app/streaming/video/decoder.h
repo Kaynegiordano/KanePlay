@@ -53,6 +53,8 @@ typedef struct _DECODER_PARAMETERS {
     int vrrDisplayRefreshHz;
     // Show an interpolated frame between each pair of decoded frames
     bool enableFrameInterpolation;
+    // Let AMD's driver interpolate (AMF FRC) when available
+    bool allowAmdFrameInterpolation;
     bool testOnly;
 } DECODER_PARAMETERS, *PDECODER_PARAMETERS;
 

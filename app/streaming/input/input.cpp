@@ -135,6 +135,16 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
     m_SpecialKeyCombos[KeyComboToggleKeyboardGrab].scanCode = SDL_SCANCODE_K;
     m_SpecialKeyCombos[KeyComboToggleKeyboardGrab].enabled = WMUtils::isRunningDesktopEnvironment();
 
+    m_SpecialKeyCombos[KeyComboCaptureFrames].keyCombo = KeyComboCaptureFrames;
+    m_SpecialKeyCombos[KeyComboCaptureFrames].keyCode = SDLK_f;
+    m_SpecialKeyCombos[KeyComboCaptureFrames].scanCode = SDL_SCANCODE_F;
+    m_SpecialKeyCombos[KeyComboCaptureFrames].enabled = true;
+
+    m_SpecialKeyCombos[KeyComboOpenMenu].keyCombo = KeyComboOpenMenu;
+    m_SpecialKeyCombos[KeyComboOpenMenu].keyCode = SDLK_o;
+    m_SpecialKeyCombos[KeyComboOpenMenu].scanCode = SDL_SCANCODE_O;
+    m_SpecialKeyCombos[KeyComboOpenMenu].enabled = true;
+
     m_OldIgnoreDevices = SDL_GetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES);
     m_OldIgnoreDevicesExcept = SDL_GetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT);
 
@@ -222,6 +232,9 @@ SdlInputHandler::~SdlInputHandler()
         if (m_GamepadState[i].mouseEmulationTimer != 0) {
             Session::get()->notifyMouseEmulationMode(false);
             SDL_RemoveTimer(m_GamepadState[i].mouseEmulationTimer);
+        }
+        if (m_GamepadState[i].comboTimer != 0) {
+            SDL_RemoveTimer(m_GamepadState[i].comboTimer);
         }
 #if !SDL_VERSION_ATLEAST(2, 0, 9)
         if (m_GamepadState[i].haptic != nullptr) {

@@ -4,6 +4,7 @@
 
 #include <QFile>
 #include <QString>
+#include <QVector>
 
 #include <atomic>
 
@@ -30,6 +31,9 @@ public:
     // Called once the stream is over to save its summary and update the bitrate learned for this host
     void finishSession();
 
+    // Remembered with the summary, so the UI can offer to resume this app
+    void setApp(const QString& name, int id) { m_AppName = name; m_AppId = id; }
+
     // Share of the configured bitrate used for this session
     double getLearnedFactor() const { return m_LearnedFactor; }
 
@@ -53,5 +57,19 @@ private:
     uint64_t m_TotalFrames;
     uint64_t m_DroppedFrames;
     uint64_t m_SessionStartUs;
+    double m_SumRenderedFps;
+    double m_SumVideoMbps;
+    uint64_t m_SumRttMs;
+    uint64_t m_RttWindows;
+
+    // Round-trip time over the session for the summary graph, averaged over
+    // m_RttSeriesStep windows per point so a long session keeps few points
+    QVector<int> m_RttSeries;
+    int m_RttSeriesStep;
+    uint64_t m_RttSeriesSum;
+    int m_RttSeriesCount;
+
+    QString m_AppName;
+    int m_AppId;
     QFile m_CsvFile;
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "d3d11frameinterpolator.h"
+#include "d3d11amffrc.h"
 #include "ivrrframepresenter.h"
 #include "renderer.h"
 
@@ -16,6 +17,8 @@ extern "C" {
 
 #include <memory>
 
+#include <QStringList>
+
 class D3D11VARenderer : public IFFmpegRenderer, public IVrrFramePresenter
 {
 public:
@@ -26,7 +29,8 @@ public:
     virtual bool prepareDecoderContextInGetFormat(AVCodecContext* context, AVPixelFormat pixelFormat) override;
     virtual void renderFrame(AVFrame* frame) override;
     virtual IVrrFramePresenter* getVrrFramePresenter() override;
-    virtual bool isFrameInterpolationActive() override { return m_FrameInterpolator != nullptr; }
+    virtual const char* getFrameInterpolationEngine() override;
+    virtual const char* getFrameInterpolationProblem() override;
 
     virtual bool canLatchAdaptivePresent() const override { return true; }
     virtual VrrFallbackReason checkSupport() const override;
@@ -66,7 +70,9 @@ private:
     bool initializeFrameInterpolation();
     void renderInterpolatedFrame(AVFrame* frame);
     void bindFrameInterpolationVertexBuffer(AVFrame* frame, bool convert);
-    void waitForInterpolatedFrame(IDXGIOutput* output, bool fenceSignalled, uint64_t presentUs);
+    void waitForInterpolatedFrame(bool fenceSignalled, uint64_t presentUs);
+    UINT getPendingPresentCount();
+    void captureInterpolatorFrame(AVFrame* frame);
     bool initializeVrrPresentReadyFence();
     bool waitForVrrPresentReady();
     HRESULT presentPreparedFrame(UINT flags);
@@ -156,6 +162,12 @@ private:
 
     // Frame interpolation (shows an extra frame between each pair of decoded frames)
     std::unique_ptr<D3D11FrameInterpolator> m_FrameInterpolator;
+
+    // AMD's frame rate conversion (AMF FRC), set up for the video size
+    bool m_TryAmdFrc = false;
+    std::unique_ptr<D3D11AmfFrc> m_AmdFrc;
+    int m_AmdFrcWidth = 0;
+    int m_AmdFrcHeight = 0;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiConvertVertexBuffer;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiDisplayVertexBuffer;
     Microsoft::WRL::ComPtr<ID3D11Fence> m_FiFence;
@@ -164,6 +176,16 @@ private:
     HANDLE m_FiTimer;
     uint64_t m_FiInterpolatedFrames;
     uint64_t m_FiDecodedFrames;
+    uint64_t m_FiSkippedGaps;
+    char m_FiProblem[64];
+    uint64_t m_FiSkippedBacklog;
+    int64_t m_FiLastPts;
+
+    // Diagnostics: consecutive frames saved on request (Ctrl+Alt+Shift+F)
+    int m_FiCaptureRemaining;
+    QString m_FiCaptureDir;
+    QStringList m_FiCaptureInfo;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_FiCaptureStaging;
 
     AVBufferRef* m_HwDeviceContext;
 };

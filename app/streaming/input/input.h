@@ -5,6 +5,9 @@
 
 #include "SDL_compat.h"
 
+// Posted by the gamepad combo timer, handled on the main thread
+#define SDL_CODE_GAMEPAD_COMBO_TIMEOUT 106
+
 struct GamepadState {
     SDL_GameController* controller;
     SDL_JoystickID jsId;
@@ -18,6 +21,19 @@ struct GamepadState {
 
     SDL_TimerID mouseEmulationTimer;
     uint32_t lastStartDownTime;
+
+    // Start and Select went down together and nothing else yet: releasing
+    // them opens the in-game menu
+    bool menuComboArmed;
+
+    // Start and Select are held back from the host for a moment, since they
+    // may begin a combo the host must not see (a game pauses on Start).
+    // withheldButtons haven't been sent yet, tapButtons were released before
+    // being sent and are sent as a short press.
+    int withheldButtons;
+    int tapButtons;
+    SDL_TimerID comboTimer;
+    uint32_t comboTimerSerial;
 
     bool clickpadButtonEmulationEnabled;
     bool emulatedClickpadButtonDown;
@@ -102,6 +118,12 @@ public:
 
     void handleControllerButtonEvent(SDL_ControllerButtonEvent* event);
 
+    // Mouse control with the first gamepad, like a long press on Start
+    void toggleGamepadMouseEmulation();
+
+    // Start or Select held back for a combo waited long enough (see GamepadState)
+    void handleGamepadComboTimeout(int slot, uint32_t serial);
+
     void handleControllerDeviceEvent(SDL_ControllerDeviceEvent* event);
 
 #if SDL_VERSION_ATLEAST(2, 0, 14)
@@ -168,6 +190,8 @@ private:
         KeyComboTogglePointerRegionLock,
         KeyComboQuitAndExit,
         KeyComboToggleKeyboardGrab,
+        KeyComboCaptureFrames,
+        KeyComboOpenMenu,
         KeyComboMax
     };
 
@@ -193,6 +217,11 @@ private:
 
     static
     Uint32 mouseEmulationTimerCallback(Uint32 interval, void* param);
+
+    static
+    Uint32 gamepadComboTimerCallback(Uint32 interval, void* param);
+
+    void startGamepadComboTimer(GamepadState* state, Uint32 interval);
 
     static
     Uint32 releaseLeftButtonTimerCallback(Uint32 interval, void* param);

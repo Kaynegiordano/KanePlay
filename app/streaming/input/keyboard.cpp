@@ -49,6 +49,18 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
         raiseAllKeys();
         break;
 
+    case KeyComboCaptureFrames:
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Detected frame capture combo");
+        Session::get()->requestFrameCapture();
+        break;
+
+    case KeyComboOpenMenu:
+        // The keys go to the menu until it closes, so don't leave any down on the host
+        raiseAllKeys();
+        Session::get()->getInGameMenu().open();
+        break;
+
     case KeyComboToggleStatsOverlay:
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Detected stats toggle combo");
@@ -182,6 +194,15 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
     if (event->repeat) {
         // Ignore repeat key down events
         SDL_assert(event->state == SDL_PRESSED);
+        return;
+    }
+
+    // The in-game menu takes the keyboard while it's open
+    InGameMenu& menu = Session::get()->getInGameMenu();
+    if (menu.isOpen()) {
+        if (event->state == SDL_PRESSED) {
+            menu.handleKey(event->keysym.sym);
+        }
         return;
     }
 

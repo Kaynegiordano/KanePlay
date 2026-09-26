@@ -14,6 +14,14 @@
 
 #include <dwmapi.h>
 
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QImage>
+#include <QStandardPaths>
+
+#include <thread>
+
 using Microsoft::WRL::ComPtr;
 
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
@@ -84,6 +92,11 @@ D3D11VARenderer::D3D11VARenderer(int decoderSelectionPass)
       m_FiTimer(nullptr),
       m_FiInterpolatedFrames(0),
       m_FiDecodedFrames(0),
+      m_FiSkippedGaps(0),
+      m_FiProblem(),
+      m_FiSkippedBacklog(0),
+      m_FiLastPts(AV_NOPTS_VALUE),
+      m_FiCaptureRemaining(0),
       m_HwDeviceContext(nullptr)
 {
     m_ContextLock = SDL_CreateMutex();
@@ -102,10 +115,14 @@ D3D11VARenderer::~D3D11VARenderer()
 
     if (m_FrameInterpolator) {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Frame interpolation: %llu frames added to %llu decoded frames",
+                    "Frame interpolation: %llu frames added to %llu decoded frames (skipped: %llu non-consecutive, %llu display backlog)",
                     (unsigned long long)m_FiInterpolatedFrames,
-                    (unsigned long long)m_FiDecodedFrames);
+                    (unsigned long long)m_FiDecodedFrames,
+                    (unsigned long long)m_FiSkippedGaps,
+                    (unsigned long long)m_FiSkippedBacklog);
     }
+    // AMF works on the render device, so it goes first
+    m_AmdFrc.reset();
     m_FrameInterpolator.reset();
     m_FiConvertVertexBuffer.Reset();
     m_FiDisplayVertexBuffer.Reset();
@@ -743,6 +760,8 @@ bool D3D11VARenderer::initializeFrameInterpolation()
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "Frame interpolation: unavailable, a %d Hz display can't show twice %d FPS",
                     refreshRate, m_DecoderParams.frameRate);
+        SDL_snprintf(m_FiProblem, sizeof(m_FiProblem), "%d FPS ON A %d HZ DISPLAY",
+                     m_DecoderParams.frameRate, refreshRate);
         return false;
     }
 
@@ -753,6 +772,7 @@ bool D3D11VARenderer::initializeFrameInterpolation()
     if (!interpolator->initialize(m_RenderDevice.Get(), m_RenderDeviceContext.Get(), swapChainDesc.Format)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "Frame interpolation: unavailable, unable to create GPU resources");
+        SDL_strlcpy(m_FiProblem, "GPU RESOURCES", sizeof(m_FiProblem));
         return false;
     }
 
@@ -774,10 +794,13 @@ bool D3D11VARenderer::initializeFrameInterpolation()
 
     m_FrameInterpolator = std::move(interpolator);
 
+    // AMD's interpolation needs the video size, so it's set up with the first frame
+    m_TryAmdFrc = m_DecoderParams.allowAmdFrameInterpolation;
+
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Frame interpolation: %d FPS stream shown at %d FPS on a %d Hz display (%s)",
                 m_DecoderParams.frameRate, m_DecoderParams.frameRate * 2, refreshRate,
-                m_AllowTearing ? "timed" : "V-sync");
+                m_AllowTearing ? "timed" : "V-sync queue");
     return true;
 }
 
@@ -841,8 +864,16 @@ bool D3D11VARenderer::prepareDecoderContextInGetFormat(AVCodecContext *context, 
 void D3D11VARenderer::renderFrame(AVFrame* frame)
 {
     if (m_FrameInterpolator) {
-        renderInterpolatedFrame(frame);
-        return;
+        if (!Session::get()->isFrameInterpolationPaused()) {
+            renderInterpolatedFrame(frame);
+            return;
+        }
+
+        // Paused from the in-game menu: frames are shown as they come. A gap of a
+        // second makes the interpolation start again from scratch once resumed.
+        if (frame->pts != AV_NOPTS_VALUE) {
+            m_FiLastPts = frame->pts - 90000;
+        }
     }
 
     // Acquire the context lock for rendering to prevent concurrent
@@ -890,19 +921,47 @@ void D3D11VARenderer::renderFrame(AVFrame* frame)
 void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
 {
     // Acquire the context lock for rendering to prevent concurrent
-    // access from inside FFmpeg's decoding code. It is released while
-    // waiting to show the decoded frame.
+    // access from inside FFmpeg's decoding code. Without V-sync, it is
+    // released while waiting to show the decoded frame.
     const bool sharedContext = m_DecodeDevice == m_RenderDevice;
-    const UINT presentFlags = m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
     const float clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-    ComPtr<IDXGIOutput> output;
+
+    // With V-sync, both frames go through the swapchain queue (sync interval 1),
+    // so each one is shown for one refresh, in order. Presenting immediately
+    // instead would let the next interpolated frame replace the decoded frame
+    // before it reaches the screen whenever the pacer releases frames on the
+    // refresh where the decoded frame is presented.
+    const bool queued = !m_AllowTearing;
+    const UINT syncInterval = queued ? 1 : 0;
+    const UINT presentFlags = m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
+
     bool interpolated = false;
     bool fenceSignalled = false;
     uint64_t presentUs = 0;
     HRESULT hr = S_OK;
 
+    // Frames that aren't consecutive (lost on the network, dropped by the pacer,
+    // or a game running below the stream rate) can't be interpolated: the motion
+    // between them doesn't fit in half a frame.
+    bool consecutive = true;
+    if (frame->pts != AV_NOPTS_VALUE && m_FiLastPts != AV_NOPTS_VALUE && m_DecoderParams.frameRate > 0) {
+        // 90 kHz RTP timestamps, which wrap around
+        int32_t delta = (int32_t)((uint32_t)frame->pts - (uint32_t)m_FiLastPts);
+        int32_t expected = 90000 / m_DecoderParams.frameRate;
+        consecutive = delta > expected / 2 && delta < expected * 3 / 2;
+    }
+    m_FiLastPts = frame->pts;
+
     if (sharedContext) {
         lockContext(this);
+    }
+
+    if (!consecutive) {
+        m_FrameInterpolator->reset();
+        if (m_AmdFrc) {
+            m_AmdFrc->reset();
+        }
+        m_FiSkippedGaps++;
     }
 
     ID3D11RenderTargetView* frameTarget = m_FrameInterpolator->beginFrame(frame->width, frame->height);
@@ -926,64 +985,117 @@ void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
         updateSwapChainColorSpace(frame);
         m_FiDecodedFrames++;
 
-        if (m_FrameInterpolator->analyzeFrame()) {
+        captureInterpolatorFrame(frame);
+
+        // AMD's interpolation is set up (again) for the video size
+        if (m_TryAmdFrc && (!m_AmdFrc || frame->width != m_AmdFrcWidth || frame->height != m_AmdFrcHeight)) {
+            DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+            m_SwapChain->GetDesc1(&swapChainDesc);
+
+            m_AmdFrc = std::make_unique<D3D11AmfFrc>();
+            m_AmdFrcWidth = frame->width;
+            m_AmdFrcHeight = frame->height;
+            if (!m_AmdFrc->initialize(m_RenderDevice.Get(), m_RenderDeviceContext.Get(),
+                                      swapChainDesc.Format, frame->width, frame->height)) {
+                // Don't try again for this session
+                m_AmdFrc.reset();
+                m_TryAmdFrc = false;
+            }
+        }
+
+        bool analyzed = false;
+        ID3D11ShaderResourceView* amdFrcOutput = nullptr;
+        if (m_AmdFrc) {
+            // Every frame is submitted so AMF keeps its history, even when
+            // the interpolated frame ends up skipped
+            amdFrcOutput = m_AmdFrc->interpolate(m_FrameInterpolator->currentFrameTexture());
+            analyzed = amdFrcOutput != nullptr;
+
+            if (m_AmdFrc->hasFailed()) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Frame interpolation: AMF FRC keeps failing; switching to built-in D3D11 interpolator");
+                m_AmdFrc.reset();
+                m_TryAmdFrc = false;
+                m_FrameInterpolator->reset();
+                analyzed = false;
+            }
+            else if (analyzed && queued && getPendingPresentCount() >= 2) {
+                analyzed = false;
+                m_FiSkippedBacklog++;
+            }
+        }
+        else {
+            // The built-in engine estimates motion even when the interpolated
+            // frame is skipped, so the next frame can use it as a prediction.
+            analyzed = m_FrameInterpolator->analyzeFrame();
+        }
+
+        // If the display is running behind (the previous decoded frame isn't on
+        // screen yet), skip this interpolated frame to catch up instead of
+        // letting latency pile up in the queue
+        if (analyzed && !m_AmdFrc && queued && getPendingPresentCount() >= 2) {
+            analyzed = false;
+            m_FiSkippedBacklog++;
+        }
+
+        if (analyzed) {
             m_RenderDeviceContext->ClearRenderTargetView(m_RenderTargetView.Get(), clearColor);
             bindFrameInterpolationVertexBuffer(frame, false);
-            m_FrameInterpolator->drawInterpolated();
+            if (amdFrcOutput != nullptr) {
+                m_FrameInterpolator->drawTexture(amdFrcOutput);
+            }
+            else {
+                m_FrameInterpolator->drawInterpolated();
+            }
             for (int i = 0; i < Overlay::OverlayMax; i++) {
                 renderOverlay((Overlay::OverlayType)i);
             }
 
-            if (m_FiFence) {
+            if (!queued && m_FiFence) {
                 fenceSignalled = SUCCEEDED(m_RenderDeviceContext->Signal(m_FiFence.Get(), ++m_FiFenceValue));
             }
 
-            hr = presentPreparedFrame(presentFlags);
+            hr = m_SwapChain->Present(syncInterval, presentFlags);
             presentUs = LiGetMicroseconds();
             if (SUCCEEDED(hr)) {
                 interpolated = true;
                 m_FiInterpolatedFrames++;
-
-                // With V-sync, we wait for the vertical blank of the output showing the window
-                if (!m_AllowTearing) {
-                    m_SwapChain->GetContainingOutput(&output);
-                }
             }
         }
+    }
+
+    // Without V-sync, the decoded frame is shown half a frame after the
+    // interpolated one, so wait without holding the context lock
+    if (interpolated && !queued) {
+        if (sharedContext) {
+            unlockContext(this);
+        }
+
+        waitForInterpolatedFrame(fenceSignalled, presentUs);
+
+        if (sharedContext) {
+            lockContext(this);
+        }
+    }
+
+    // The window may have been resized while we were waiting
+    if (SUCCEEDED(hr) && m_RenderTargetView != nullptr) {
+        m_RenderDeviceContext->ClearRenderTargetView(m_RenderTargetView.Get(), clearColor);
+        m_RenderDeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), nullptr);
+        bindFrameInterpolationVertexBuffer(frame, false);
+        m_FrameInterpolator->drawCurrent();
+        for (int i = 0; i < Overlay::OverlayMax; i++) {
+            renderOverlay((Overlay::OverlayType)i);
+        }
+
+        hr = m_SwapChain->Present(syncInterval, presentFlags);
+    }
+    else if (SUCCEEDED(hr)) {
+        hr = E_FAIL;
     }
 
     if (sharedContext) {
         unlockContext(this);
-    }
-
-    if (interpolated) {
-        waitForInterpolatedFrame(output.Get(), fenceSignalled, presentUs);
-    }
-
-    if (SUCCEEDED(hr)) {
-        if (sharedContext) {
-            lockContext(this);
-        }
-
-        // The window may have been resized while we were waiting
-        if (m_RenderTargetView != nullptr) {
-            m_RenderDeviceContext->ClearRenderTargetView(m_RenderTargetView.Get(), clearColor);
-            m_RenderDeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), nullptr);
-            bindFrameInterpolationVertexBuffer(frame, false);
-            m_FrameInterpolator->drawCurrent();
-            for (int i = 0; i < Overlay::OverlayMax; i++) {
-                renderOverlay((Overlay::OverlayType)i);
-            }
-
-            hr = presentPreparedFrame(presentFlags);
-        }
-        else {
-            hr = E_FAIL;
-        }
-
-        if (sharedContext) {
-            unlockContext(this);
-        }
     }
 
     if (FAILED(hr)) {
@@ -996,20 +1108,48 @@ void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
     }
 }
 
-void D3D11VARenderer::waitForInterpolatedFrame(IDXGIOutput* output, bool fenceSignalled, uint64_t presentUs)
+const char* D3D11VARenderer::getFrameInterpolationEngine()
+{
+    if (!m_FrameInterpolator || Session::get()->isFrameInterpolationPaused()) {
+        return nullptr;
+    }
+    if (m_AmdFrc) {
+        return "AMD FRC";
+    }
+    return "KanePlay";
+}
+
+const char* D3D11VARenderer::getFrameInterpolationProblem()
+{
+    if (m_FrameInterpolator) {
+        return Session::get()->isFrameInterpolationPaused() ? "PAUSED" : nullptr;
+    }
+    return m_FiProblem[0] != 0 ? m_FiProblem : "UNAVAILABLE";
+}
+
+UINT D3D11VARenderer::getPendingPresentCount()
+{
+    // Frames presented but not shown yet. Frame statistics are unavailable for a
+    // short while after the swapchain is created or changes mode.
+    UINT lastPresentCount;
+    DXGI_FRAME_STATISTICS stats;
+    if (FAILED(m_SwapChain->GetLastPresentCount(&lastPresentCount)) ||
+            FAILED(m_SwapChain->GetFrameStatistics(&stats)) ||
+            stats.PresentCount > lastPresentCount) {
+        return 0;
+    }
+
+    return lastPresentCount - stats.PresentCount;
+}
+
+void D3D11VARenderer::waitForInterpolatedFrame(bool fenceSignalled, uint64_t presentUs)
 {
     // Nothing can be shown before the GPU is done drawing it
     if (fenceSignalled && SUCCEEDED(m_FiFence->SetEventOnCompletion(m_FiFenceValue, m_FiFenceEvent))) {
         WaitForSingleObject(m_FiFenceEvent, 50);
     }
 
-    // With V-sync, the interpolated frame is picked up at the next vertical
-    // blank, so the decoded frame is presented right after it for the next one.
-    if (output != nullptr && SUCCEEDED(output->WaitForVBlank())) {
-        return;
-    }
-
-    // Otherwise, show the decoded frame half a stream frame after the interpolated one
+    // Show the decoded frame half a stream frame after the interpolated one
     int64_t remainingUs = (int64_t)(presentUs + 500000 / m_DecoderParams.frameRate) - (int64_t)LiGetMicroseconds();
     if (remainingUs <= 0) {
         return;
@@ -1025,6 +1165,78 @@ void D3D11VARenderer::waitForInterpolatedFrame(IDXGIOutput* output, bool fenceSi
     }
 
     SDL_Delay((Uint32)((remainingUs + 999) / 1000));
+}
+
+#define FI_CAPTURE_FRAMES 8
+
+void D3D11VARenderer::captureInterpolatorFrame(AVFrame* frame)
+{
+    if (m_FiCaptureRemaining == 0) {
+        if (Session::get() == nullptr || !Session::get()->takeFrameCaptureRequest()) {
+            return;
+        }
+
+        m_FiCaptureRemaining = FI_CAPTURE_FRAMES;
+        m_FiCaptureDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) +
+                         "/KanePlay-FrameGen/" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+        m_FiCaptureInfo.clear();
+        m_FiCaptureInfo << QString("stream %1 FPS, %2x%3").arg(m_DecoderParams.frameRate).arg(frame->width).arg(frame->height);
+        QDir().mkpath(m_FiCaptureDir);
+    }
+
+    // Copy the converted frame to the CPU. This stalls the GPU for this
+    // frame, which is fine for a short diagnostic capture.
+    ID3D11Texture2D* texture = m_FrameInterpolator->currentFrameTexture();
+    D3D11_TEXTURE2D_DESC desc;
+    texture->GetDesc(&desc);
+
+    D3D11_TEXTURE2D_DESC stagingDesc = {};
+    if (m_FiCaptureStaging) {
+        m_FiCaptureStaging->GetDesc(&stagingDesc);
+    }
+    if (!m_FiCaptureStaging || stagingDesc.Width != desc.Width || stagingDesc.Height != desc.Height || stagingDesc.Format != desc.Format) {
+        stagingDesc = desc;
+        stagingDesc.Usage = D3D11_USAGE_STAGING;
+        stagingDesc.BindFlags = 0;
+        stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        m_FiCaptureStaging.Reset();
+        if (FAILED(m_RenderDevice->CreateTexture2D(&stagingDesc, nullptr, &m_FiCaptureStaging))) {
+            m_FiCaptureRemaining = 0;
+            return;
+        }
+    }
+
+    m_RenderDeviceContext->CopyResource(m_FiCaptureStaging.Get(), texture);
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    if (FAILED(m_RenderDeviceContext->Map(m_FiCaptureStaging.Get(), 0, D3D11_MAP_READ, 0, &mapped))) {
+        m_FiCaptureRemaining = 0;
+        return;
+    }
+
+    QImage::Format format = desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM ?
+                                QImage::Format_A2BGR30_Premultiplied : QImage::Format_RGBA8888;
+    QImage image = QImage((const uchar*)mapped.pData, desc.Width, desc.Height, mapped.RowPitch, format)
+                       .convertToFormat(QImage::Format_RGB888);
+    m_RenderDeviceContext->Unmap(m_FiCaptureStaging.Get(), 0);
+
+    int index = FI_CAPTURE_FRAMES - m_FiCaptureRemaining;
+    m_FiCaptureInfo << QString("frame_%1.png pts %2").arg(index).arg((qint64)frame->pts);
+
+    // Encoding PNGs is slow, so do it on another thread
+    QString path = QString("%1/frame_%2.png").arg(m_FiCaptureDir).arg(index);
+    std::thread([image, path]() { image.save(path); }).detach();
+
+    if (--m_FiCaptureRemaining == 0) {
+        QFile info(m_FiCaptureDir + "/info.txt");
+        if (info.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            info.write(m_FiCaptureInfo.join("\n").toUtf8());
+        }
+
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation: %d frames saved to %s",
+                    FI_CAPTURE_FRAMES, qPrintable(m_FiCaptureDir));
+    }
 }
 
 void D3D11VARenderer::bindFrameInterpolationVertexBuffer(AVFrame* frame, bool convert)
@@ -1459,6 +1671,11 @@ bool D3D11VARenderer::createOverlayVertexBuffer(Overlay::OverlayType type, int w
         // Top left
         renderRect.x = 0;
         renderRect.y = m_DisplayHeight - height;
+    }
+    else if (type == Overlay::OverlayMenu) {
+        // Left, centered vertically
+        renderRect.x = m_DisplayHeight / 40;
+        renderRect.y = (m_DisplayHeight - height) / 2;
     }
 
     renderRect.w = width;

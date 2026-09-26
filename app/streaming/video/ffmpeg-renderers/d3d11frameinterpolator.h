@@ -33,9 +33,13 @@ public:
     // bound vertex buffer, which must map the video with texcoords from 0 to 1.
     void drawInterpolated();
     void drawCurrent();
+    void drawTexture(ID3D11ShaderResourceView* texture);
 
     // Forgets the previous frame, for example after the stream was interrupted
     void reset();
+
+    // The frame converted since beginFrame(), in RGB at the video resolution
+    ID3D11Texture2D* currentFrameTexture() const { return m_Frames[m_CurrentFrame].rgb.Get(); }
 
 private:
     // Level 0 is half the video resolution, each following level halves it again
@@ -70,6 +74,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_PyramidShader;
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_MotionShader;
+    Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_FilterShader;
     Microsoft::WRL::ComPtr<ID3D11PixelShader> m_InterpolateShader;
     Microsoft::WRL::ComPtr<ID3D11PixelShader> m_BlitShader;
     Microsoft::WRL::ComPtr<ID3D11SamplerState> m_Sampler;
@@ -83,8 +88,8 @@ private:
     int m_CurrentFrame;
     int m_ValidFrames;
 
-    // Motion of the coarser levels, then the final motion of this frame and
-    // of the previous one (used as a prediction for the next one)
+    // Raw motion of each level, then the filtered motion of this frame and of
+    // the previous one (used as a prediction for the next one)
     std::array<Field, k_Levels> m_LevelFields;
     std::array<Field, 2> m_FinalFields;
     int m_CurrentField;
@@ -93,5 +98,6 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D11Buffer>, k_Levels> m_PyramidConstants;
     std::array<Microsoft::WRL::ComPtr<ID3D11Buffer>, k_Levels> m_MotionConstants;
     int m_MotionConstantsTemporal;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_FilterConstants;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_InterpolateConstants;
 };

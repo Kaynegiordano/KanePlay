@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QSemaphore>
+#include <atomic>
 #include <QQuickWindow>
 
 #include <Limelight.h>
@@ -10,6 +11,7 @@
 #include "video/decoder.h"
 #include "audio/renderers/renderer.h"
 #include "video/overlaymanager.h"
+#include "ingamemenu.h"
 #include "streamhealth.h"
 
 class SupportedVideoFormatList : public QList<int>
@@ -111,6 +113,24 @@ public:
     Q_INVOKABLE bool isReconnectable() const { return m_Reconnectable; }
 
     bool isBatterySaverActive() const { return m_BatterySaverActive; }
+
+    // For the in-game menu
+    InGameMenu& getInGameMenu() { return m_InGameMenu; }
+    QString getAppName() const { return m_App.name; }
+    QString getComputerName() const { return m_Computer->name; }
+    int getWindowPixelHeight();
+    bool hasFrameInterpolation() const { return m_Preferences->frameInterpolation; }
+    bool canToggleGamepadMouse() const { return m_Preferences->gamepadMouse; }
+    bool isGamepadMouseActive() const { return m_MouseEmulationRefCount > 0; }
+    void toggleGamepadMouse();
+
+    // The frame doubler can be paused from the in-game menu, the renderer checks it each frame
+    bool isFrameInterpolationPaused() const { return m_FrameInterpolationPaused; }
+    void setFrameInterpolationPaused(bool paused) { m_FrameInterpolationPaused = paused; }
+
+    // Asks the renderer to save a few decoded frames, to study frame interpolation
+    void requestFrameCapture() { m_FrameCaptureRequested = true; }
+    bool takeFrameCaptureRequest() { return m_FrameCaptureRequested.exchange(false); }
     Q_PROPERTY(QStringList launchWarnings MEMBER m_LaunchWarnings NOTIFY launchWarningsChanged);
 
     static
@@ -317,6 +337,9 @@ private:
     bool m_StreamStarted;
     bool m_Reconnectable;
     bool m_BatterySaverActive;
+    std::atomic<bool> m_FrameCaptureRequested { false };
+    std::atomic<bool> m_FrameInterpolationPaused { false };
+    InGameMenu m_InGameMenu;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;

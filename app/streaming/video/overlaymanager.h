@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QVector>
 
 #include "SDL_compat.h"
 #include <SDL_ttf.h>
@@ -10,7 +11,27 @@ namespace Overlay {
 enum OverlayType {
     OverlayDebug,
     OverlayStatusUpdate,
+    // The in-game menu, see InGameMenu
+    OverlayMenu,
     OverlayMax
+};
+
+// Contents of the in-game menu panel
+struct MenuItem {
+    QString label;
+    bool isToggle;
+    bool toggleOn;
+    bool danger;
+};
+
+struct MenuModel {
+    QString title;
+    QString subtitle;
+    QVector<MenuItem> items;
+    int selected;
+    QString hints;
+    // 1.0 for a 1080p window
+    float scale;
 };
 
 class IOverlayRenderer
@@ -37,12 +58,16 @@ public:
     int getOverlayFontSize(OverlayType type);
     SDL_Surface* getUpdatedOverlaySurface(OverlayType type);
 
+    // Shows the in-game menu with this content, or updates it
+    void showMenu(const MenuModel& model);
+
     void setOverlayRenderer(IOverlayRenderer* renderer);
 
 private:
     void notifyOverlayUpdated(OverlayType type);
     SDL_Surface* RenderTextOutlinedWrapped(TTF_Font* font, const char* text, SDL_Color textColor, SDL_Color outlineColor, int outlineWidth, int wrapWidth);
     SDL_Surface* RenderStatsPanel(TTF_Font* font, const char* text, SDL_Color textColor, SDL_Color accentColor, int wrapWidth);
+    SDL_Surface* RenderMenuPanel();
 
     struct {
         bool enabled;
@@ -56,6 +81,10 @@ private:
     IOverlayRenderer* m_Renderer;
     QByteArray m_FontData;
     QByteArray m_DebugFontData;
+
+    MenuModel m_Menu;
+    // Regular, semibold and bold faces of the UI font for the menu
+    QByteArray m_MenuFontData[3];
 };
 
 }

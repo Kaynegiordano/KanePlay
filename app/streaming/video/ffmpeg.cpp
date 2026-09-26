@@ -1143,8 +1143,25 @@ void FFmpegVideoDecoder::stringifyVideoStatsCompact(VIDEO_STATS& stats, char* ou
     else if (m_Pacer != nullptr && m_Pacer->isAutoPacing()) {
         extras << (m_Pacer->getPacingState() == 1 ? "PACING AUTO ON" : "PACING AUTO OFF");
     }
-    if (m_FrontendRenderer != nullptr && m_FrontendRenderer->isFrameInterpolationActive()) {
-        extras << "FRAME GEN x2";
+    const char* frameInterpolationEngine = m_FrontendRenderer != nullptr ?
+                                               m_FrontendRenderer->getFrameInterpolationEngine() : nullptr;
+    if (frameInterpolationEngine != nullptr) {
+        extras << QString("FRAME GEN x2 (%1)").arg(frameInterpolationEngine);
+    }
+    else if (m_FrontendRenderer != nullptr && StreamingPreferences::get()->frameInterpolation) {
+        // Turned on but not running: say why, instead of just leaving it out
+        if (!isHardwareAccelerated()) {
+            extras << QString("FRAME GEN OFF (SOFTWARE DECODING)");
+        }
+        else if (m_FrontendRenderer->getRendererType() != IFFmpegRenderer::RendererType::D3D11VA) {
+            extras << QString("FRAME GEN OFF (%1 RENDERER)").arg(m_FrontendRenderer->getRendererName());
+        }
+        else {
+            const char* problem = m_FrontendRenderer->getFrameInterpolationProblem();
+            if (problem != nullptr) {
+                extras << QString("FRAME GEN OFF (%1)").arg(problem);
+            }
+        }
     }
 
     Session* session = Session::get();

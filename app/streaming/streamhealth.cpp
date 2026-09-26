@@ -8,6 +8,9 @@
 #include <Limelight.h>
 #include <SDL.h>
 
+// Points kept for the round-trip time graph of the session summary
+#define MAX_RTT_SERIES_POINTS 120
+
 // A window (~1 second) is lossy when this share of its frames was lost despite FEC
 #define LOSSY_WINDOW_PERCENT 2.0
 
@@ -40,7 +43,15 @@ StreamHealthMonitor::StreamHealthMonitor(const QString& hostUuid, int bitrateKbp
       m_LossyWindows(0),
       m_TotalFrames(0),
       m_DroppedFrames(0),
-      m_SessionStartUs(LiGetMicroseconds())
+      m_SessionStartUs(LiGetMicroseconds()),
+      m_SumRenderedFps(0),
+      m_SumVideoMbps(0),
+      m_SumRttMs(0),
+      m_RttWindows(0),
+      m_RttSeriesStep(1),
+      m_RttSeriesSum(0),
+      m_RttSeriesCount(0),
+      m_AppId(0)
 {
     if (logStats) {
         openCsv(width, height, fps);
@@ -57,7 +68,7 @@ StreamHealthMonitor::~StreamHealthMonitor()
 void StreamHealthMonitor::openCsv(int width, int height, int fps)
 {
     QDir logDir(Path::getLogDir());
-    m_CsvFile.setFileName(logDir.filePath(QString("Moonlight-stats-%1.csv")
+    m_CsvFile.setFileName(logDir.filePath(QString("KanePlay-stats-%1.csv")
                                               .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"))));
     if (!m_CsvFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
@@ -115,13 +126,37 @@ void StreamHealthMonitor::onStatsWindow(const VIDEO_STATS& window, int videoForm
         m_LossyWindows++;
     }
 
-    if (!m_CsvFile.isOpen()) {
-        return;
-    }
-
     uint32_t rtt, rttVariance;
     if (!LiGetEstimatedRttInfo(&rtt, &rttVariance)) {
         rtt = rttVariance = 0;
+    }
+
+    m_SumRenderedFps += window.renderedFrames / windowSecs;
+    m_SumVideoMbps += videoMbps;
+    if (rtt != 0) {
+        m_SumRttMs += rtt;
+        m_RttWindows++;
+
+        m_RttSeriesSum += rtt;
+        if (++m_RttSeriesCount == m_RttSeriesStep) {
+            m_RttSeries.append((int)(m_RttSeriesSum / m_RttSeriesCount));
+            m_RttSeriesSum = 0;
+            m_RttSeriesCount = 0;
+
+            // Halve the resolution once the graph has enough points
+            if (m_RttSeries.size() >= MAX_RTT_SERIES_POINTS) {
+                QVector<int> halved;
+                for (int i = 0; i + 1 < m_RttSeries.size(); i += 2) {
+                    halved.append((m_RttSeries[i] + m_RttSeries[i + 1]) / 2);
+                }
+                m_RttSeries = halved;
+                m_RttSeriesStep *= 2;
+            }
+        }
+    }
+
+    if (!m_CsvFile.isOpen()) {
+        return;
     }
 
     auto average = [](double total, uint32_t count) {
@@ -168,6 +203,17 @@ void StreamHealthMonitor::finishSession()
         summary["durationSecs"] = (qulonglong)m_Windows;
         summary["lossPercent"] = (double)m_DroppedFrames / m_TotalFrames * 100.0;
         summary["learnedPercent"] = qRound(newFactor * 100);
+        summary["appName"] = m_AppName;
+        summary["appId"] = m_AppId;
+        summary["avgFps"] = m_SumRenderedFps / m_Windows;
+        summary["avgMbps"] = m_SumVideoMbps / m_Windows;
+        summary["avgRttMs"] = m_RttWindows != 0 ? (double)m_SumRttMs / m_RttWindows : 0.0;
+
+        QVariantList rttSeries;
+        for (int rtt : m_RttSeries) {
+            rttSeries.append(rtt);
+        }
+        summary["rttSeries"] = rttSeries;
         StreamingPreferences::setLastSession(m_HostUuid, summary);
     }
 }

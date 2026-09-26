@@ -3,7 +3,89 @@
 
 #include <QFile>
 
+#include <cmath>
+
 using namespace Overlay;
+
+// Colors of the KanePlay design, for the in-game menu
+static const SDL_Color k_MenuBackground = { 0x18, 0x1A, 0x21, 0xF5 };
+static const SDL_Color k_MenuRaised = { 0x22, 0x25, 0x2E, 0xFF };
+static const SDL_Color k_MenuAccent = { 0xFF, 0x6A, 0x3D, 0xFF };
+static const SDL_Color k_MenuAccentText = { 0x14, 0x10, 0x0C, 0xFF };
+static const SDL_Color k_MenuText = { 0xF4, 0xF1, 0xEC, 0xFF };
+static const SDL_Color k_MenuTextSecondary = { 0xA9, 0xAB, 0xB4, 0xFF };
+static const SDL_Color k_MenuDanger = { 0xFF, 0x7A, 0x70, 0xFF };
+static const SDL_Color k_MenuSwitchOff = { 0x2E, 0x32, 0x3D, 0xFF };
+
+// Draws color over the ARGB8888 pixel, with the given coverage (0 to 1)
+static void blendPixel(Uint32* pixel, SDL_Color color, float coverage)
+{
+    float srcA = color.a / 255.0f * coverage;
+    if (srcA <= 0) {
+        return;
+    }
+
+    Uint32 dst = *pixel;
+    float dstA = ((dst >> 24) & 0xFF) / 255.0f;
+    float outA = srcA + dstA * (1 - srcA);
+    auto channel = [&](int shift, Uint8 src) {
+        float d = ((dst >> shift) & 0xFF) / 255.0f;
+        float out = (src / 255.0f * srcA + d * dstA * (1 - srcA)) / outA;
+        return (Uint32)SDL_clamp((int)(out * 255 + 0.5f), 0, 255);
+    };
+    *pixel = ((Uint32)(outA * 255 + 0.5f) << 24) | (channel(16, color.r) << 16) | (channel(8, color.g) << 8) | channel(0, color.b);
+}
+
+// Fills a rounded rectangle, with antialiased corners
+static void fillRoundedRect(SDL_Surface* surface, float x, float y, float w, float h, float radius, SDL_Color color)
+{
+    SDL_LockSurface(surface);
+    Uint32* pixels = (Uint32*)surface->pixels;
+    int pitch = surface->pitch / 4;
+
+    int x0 = SDL_max(0, (int)floorf(x));
+    int y0 = SDL_max(0, (int)floorf(y));
+    int x1 = SDL_min(surface->w, (int)ceilf(x + w));
+    int y1 = SDL_min(surface->h, (int)ceilf(y + h));
+
+    for (int py = y0; py < y1; py++) {
+        for (int px = x0; px < x1; px++) {
+            // Distance from the pixel center to the rounded shape
+            float cx = px + 0.5f, cy = py + 0.5f;
+            float nx = SDL_clamp(cx, x + radius, x + w - radius);
+            float ny = SDL_clamp(cy, y + radius, y + h - radius);
+            float dist = sqrtf((cx - nx) * (cx - nx) + (cy - ny) * (cy - ny)) - radius;
+
+            // And from the pixel to the edges of the rectangle itself
+            float edge = SDL_min(SDL_min(cx - x, x + w - cx), SDL_min(cy - y, y + h - cy));
+            float coverage = SDL_clamp(0.5f - dist, 0.0f, 1.0f) * SDL_clamp(edge + 0.5f, 0.0f, 1.0f);
+
+            blendPixel(&pixels[py * pitch + px], color, coverage);
+        }
+    }
+
+    SDL_UnlockSurface(surface);
+}
+
+// Draws UTF-8 text with its top left corner at (x, y), returns its width
+static int drawText(SDL_Surface* surface, TTF_Font* font, const QString& text, SDL_Color color, int x, int y)
+{
+    if (font == nullptr || text.isEmpty()) {
+        return 0;
+    }
+
+    SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, text.toUtf8().constData(), color);
+    if (textSurface == nullptr) {
+        return 0;
+    }
+
+    SDL_Rect dst = { x, y, textSurface->w, textSurface->h };
+    SDL_SetSurfaceBlendMode(textSurface, SDL_BLENDMODE_BLEND);
+    SDL_BlitSurface(textSurface, nullptr, surface, &dst);
+    int width = textSurface->w;
+    SDL_FreeSurface(textSurface);
+    return width;
+}
 
 OverlayManager::OverlayManager() :
     m_Renderer(nullptr),
@@ -24,6 +106,24 @@ OverlayManager::OverlayManager() :
 
     m_Overlays[OverlayType::OverlayStatusUpdate].color = {0xF0, 0xF3, 0xF8, 0xFF};
     m_Overlays[OverlayType::OverlayStatusUpdate].fontSize = 18;
+
+    m_Menu.selected = 0;
+    m_Menu.scale = 1.0f;
+
+#ifdef Q_OS_WIN32
+    const char* menuFonts[] = { "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/seguisb.ttf", "C:/Windows/Fonts/segoeuib.ttf" };
+    for (int i = 0; i < 3; i++) {
+        QFile menuFont(menuFonts[i]);
+        if (menuFont.open(QIODevice::ReadOnly)) {
+            m_MenuFontData[i] = menuFont.readAll();
+        }
+    }
+#endif
+    for (int i = 0; i < 3; i++) {
+        if (m_MenuFontData[i].isEmpty()) {
+            m_MenuFontData[i] = !m_DebugFontData.isEmpty() ? m_DebugFontData : m_FontData;
+        }
+    }
 
     // While TTF will usually not be initialized here, it is valid for that not to
     // be the case, since Session destruction is deferred and could overlap with
@@ -126,9 +226,27 @@ void OverlayManager::setOverlayRenderer(IOverlayRenderer* renderer)
     m_Renderer = renderer;
 }
 
+void OverlayManager::showMenu(const MenuModel& model)
+{
+    m_Menu = model;
+    m_Overlays[OverlayType::OverlayMenu].enabled = true;
+    notifyOverlayUpdated(OverlayType::OverlayMenu);
+}
+
 void OverlayManager::notifyOverlayUpdated(OverlayType type)
 {
     if (m_Renderer == nullptr) {
+        return;
+    }
+
+    // The menu draws itself with its own fonts
+    if (type == OverlayType::OverlayMenu) {
+        SDL_Surface* menuSurface = m_Overlays[type].enabled ? RenderMenuPanel() : nullptr;
+        SDL_Surface* oldMenuSurface = (SDL_Surface*)SDL_AtomicSetPtr((void**)&m_Overlays[type].surface, menuSurface);
+        m_Renderer->notifyOverlayUpdated(type);
+        if (oldMenuSurface != nullptr) {
+            SDL_FreeSurface(oldMenuSurface);
+        }
         return;
     }
 
@@ -251,6 +369,80 @@ SDL_Surface* OverlayManager::RenderStatsPanel(TTF_Font* font, const char* text, 
     SDL_Rect dst = { kAccent + kPadX, kPadY, textW, textH };
     SDL_BlitSurface(textSurface, &src, panel, &dst);
     SDL_FreeSurface(textSurface);
+
+    return panel;
+}
+
+// The in-game menu: a dark card with the app, then one row per action, the
+// selected one raised with an ember border, and the gamepad hints at the bottom
+SDL_Surface* OverlayManager::RenderMenuPanel()
+{
+    const float s = SDL_clamp(m_Menu.scale, 0.6f, 3.0f);
+    auto px = [s](float value) { return (int)lroundf(value * s); };
+
+    TTF_Font* regular = TTF_OpenFontRW(SDL_RWFromConstMem(m_MenuFontData[0].constData(), m_MenuFontData[0].size()), 1, px(15));
+    TTF_Font* hintFont = TTF_OpenFontRW(SDL_RWFromConstMem(m_MenuFontData[0].constData(), m_MenuFontData[0].size()), 1, px(13));
+    TTF_Font* semibold = TTF_OpenFontRW(SDL_RWFromConstMem(m_MenuFontData[1].constData(), m_MenuFontData[1].size()), 1, px(17));
+    TTF_Font* bold = TTF_OpenFontRW(SDL_RWFromConstMem(m_MenuFontData[2].constData(), m_MenuFontData[2].size()), 1, px(21));
+
+    SDL_Surface* panel = nullptr;
+    if (regular != nullptr && hintFont != nullptr && semibold != nullptr && bold != nullptr) {
+        const int width = px(400);
+        const int pad = px(24);
+        const int rowHeight = px(54);
+        const int rowGap = px(6);
+        const int titleHeight = TTF_FontHeight(bold);
+        const int subtitleHeight = TTF_FontHeight(regular);
+        const int hintHeight = TTF_FontHeight(hintFont);
+        const int itemsTop = pad + titleHeight + px(2) + subtitleHeight + px(20);
+        const int itemsHeight = m_Menu.items.size() * (rowHeight + rowGap) - rowGap;
+        const int height = itemsTop + itemsHeight + px(22) + hintHeight + pad;
+
+        panel = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
+        if (panel != nullptr) {
+            SDL_FillRect(panel, nullptr, 0);
+            fillRoundedRect(panel, 0, 0, width, height, px(24), k_MenuBackground);
+
+            drawText(panel, bold, m_Menu.title, k_MenuText, pad, pad);
+            drawText(panel, regular, m_Menu.subtitle, k_MenuTextSecondary, pad, pad + titleHeight + px(2));
+
+            for (int i = 0; i < m_Menu.items.size(); i++) {
+                const MenuItem& item = m_Menu.items[i];
+                int rowX = px(12);
+                int rowY = itemsTop + i * (rowHeight + rowGap);
+                int rowW = width - 2 * rowX;
+
+                if (i == m_Menu.selected) {
+                    fillRoundedRect(panel, rowX, rowY, rowW, rowHeight, px(14), k_MenuAccent);
+                    fillRoundedRect(panel, rowX + px(2), rowY + px(2), rowW - px(4), rowHeight - px(4), px(12), k_MenuRaised);
+                }
+
+                SDL_Color labelColor = item.danger ? k_MenuDanger : k_MenuText;
+                drawText(panel, semibold, item.label, labelColor, rowX + px(16), rowY + (rowHeight - TTF_FontHeight(semibold)) / 2);
+
+                if (item.isToggle) {
+                    // A switch on the right, like the ones of the settings
+                    float trackW = 44 * s, trackH = 24 * s;
+                    float trackX = rowX + rowW - px(16) - trackW;
+                    float trackY = rowY + (rowHeight - trackH) / 2;
+                    fillRoundedRect(panel, trackX, trackY, trackW, trackH, trackH / 2, item.toggleOn ? k_MenuAccent : k_MenuSwitchOff);
+
+                    float thumb = 18 * s;
+                    float thumbX = item.toggleOn ? trackX + trackW - thumb - 3 * s : trackX + 3 * s;
+                    fillRoundedRect(panel, thumbX, trackY + (trackH - thumb) / 2, thumb, thumb, thumb / 2,
+                                    item.toggleOn ? k_MenuAccentText : k_MenuTextSecondary);
+                }
+            }
+
+            drawText(panel, hintFont, m_Menu.hints, k_MenuTextSecondary, pad, height - pad - hintHeight);
+        }
+    }
+
+    for (TTF_Font* font : { regular, hintFont, semibold, bold }) {
+        if (font != nullptr) {
+            TTF_CloseFont(font);
+        }
+    }
 
     return panel;
 }

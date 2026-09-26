@@ -33,6 +33,14 @@ struct MotionConstants
 };
 static_assert(sizeof(MotionConstants) % 16 == 0, "Constant buffer sizes must be a multiple of 16");
 
+struct FilterConstants
+{
+    uint32_t gridSize[2];
+    float agreement;
+    float padding;
+};
+static_assert(sizeof(FilterConstants) % 16 == 0, "Constant buffer sizes must be a multiple of 16");
+
 struct InterpolateConstants
 {
     float videoSize[2];
@@ -87,6 +95,17 @@ bool D3D11FrameInterpolator::initialize(ID3D11Device* device, ID3D11DeviceContex
     {
         QByteArray bytecode = Path::readDataFile("d3d11_fi_motion_cs.fxc");
         hr = m_Device->CreateComputeShader(bytecode.constData(), bytecode.length(), nullptr, &m_MotionShader);
+        if (FAILED(hr)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "ID3D11Device::CreateComputeShader() failed: %x",
+                         hr);
+            return false;
+        }
+    }
+
+    {
+        QByteArray bytecode = Path::readDataFile("d3d11_fi_filter_cs.fxc");
+        hr = m_Device->CreateComputeShader(bytecode.constData(), bytecode.length(), nullptr, &m_FilterShader);
         if (FAILED(hr)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                          "ID3D11Device::CreateComputeShader() failed: %x",
@@ -189,7 +208,7 @@ bool D3D11FrameInterpolator::createTexture(int width, int height, DXGI_FORMAT fo
 bool D3D11FrameInterpolator::createField(Field& field)
 {
     ComPtr<ID3D11Texture2D> texture;
-    if (!createTexture(m_GridWidth, m_GridHeight, DXGI_FORMAT_R16G16_FLOAT,
+    if (!createTexture(m_GridWidth, m_GridHeight, DXGI_FORMAT_R16G16B16A16_FLOAT,
                        D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, texture)) {
         return false;
     }
@@ -282,8 +301,7 @@ bool D3D11FrameInterpolator::createSizeDependentResources(int width, int height)
         }
     }
 
-    // Level 0 writes straight into the final fields
-    for (int level = 1; level < k_Levels; level++) {
+    for (int level = 0; level < k_Levels; level++) {
         if (!createField(m_LevelFields[level])) {
             return false;
         }
@@ -309,6 +327,19 @@ bool D3D11FrameInterpolator::createSizeDependentResources(int width, int height)
 
         if (!createConstantBuffer(&constants, sizeof(constants), m_PyramidConstants[level]) ||
                 !createConstantBuffer(&motionConstants, sizeof(motionConstants), m_MotionConstants[level])) {
+            return false;
+        }
+    }
+
+    {
+        FilterConstants constants = {};
+        constants.gridSize[0] = m_GridWidth;
+        constants.gridSize[1] = m_GridHeight;
+
+        // Vectors within 4 pixels of each other describe the same motion
+        constants.agreement = 4.0f;
+
+        if (!createConstantBuffer(&constants, sizeof(constants), m_FilterConstants)) {
             return false;
         }
     }
@@ -425,9 +456,7 @@ bool D3D11FrameInterpolator::analyzeFrame()
             level + 1 < k_Levels ? m_LevelFields[level + 1].view.Get() : nullptr,
             hasTemporal ? m_FinalFields[m_CurrentField ^ 1].view.Get() : nullptr,
         };
-        ID3D11UnorderedAccessView* output = level == 0 ?
-                                                m_FinalFields[m_CurrentField].target.Get() :
-                                                m_LevelFields[level].target.Get();
+        ID3D11UnorderedAccessView* output = m_LevelFields[level].target.Get();
 
         m_Context->CSSetShaderResources(0, 4, inputs);
         m_Context->CSSetUnorderedAccessViews(0, 1, &output, nullptr);
@@ -437,6 +466,15 @@ bool D3D11FrameInterpolator::analyzeFrame()
         m_Context->CSSetUnorderedAccessViews(0, 1, &nullTarget, nullptr);
         m_Context->CSSetShaderResources(0, 4, nullViews);
     }
+
+    // Replace isolated wrong vectors
+    m_Context->CSSetShader(m_FilterShader.Get(), nullptr, 0);
+    m_Context->CSSetShaderResources(0, 1, m_LevelFields[0].view.GetAddressOf());
+    m_Context->CSSetUnorderedAccessViews(0, 1, m_FinalFields[m_CurrentField].target.GetAddressOf(), nullptr);
+    m_Context->CSSetConstantBuffers(0, 1, m_FilterConstants.GetAddressOf());
+    m_Context->Dispatch((m_GridWidth + 7) / 8, (m_GridHeight + 7) / 8, 1);
+    m_Context->CSSetUnorderedAccessViews(0, 1, &nullTarget, nullptr);
+    m_Context->CSSetShaderResources(0, 1, nullViews);
 
     m_Context->CSSetShader(nullptr, nullptr, 0);
     m_HasMotionHistory = true;
@@ -467,9 +505,14 @@ void D3D11FrameInterpolator::drawInterpolated()
 
 void D3D11FrameInterpolator::drawCurrent()
 {
+    drawTexture(m_Frames[m_CurrentFrame].rgbView.Get());
+}
+
+void D3D11FrameInterpolator::drawTexture(ID3D11ShaderResourceView* texture)
+{
     m_Context->PSSetShader(m_BlitShader.Get(), nullptr, 0);
     m_Context->PSSetSamplers(0, 1, m_Sampler.GetAddressOf());
-    m_Context->PSSetShaderResources(0, 1, m_Frames[m_CurrentFrame].rgbView.GetAddressOf());
+    m_Context->PSSetShaderResources(0, 1, &texture);
     m_Context->DrawIndexed(6, 0, 0);
 
     ID3D11ShaderResourceView* nullView = nullptr;

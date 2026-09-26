@@ -35,7 +35,13 @@
 #define SER_LASTSESSIONS "lastsessions"
 #define SER_AUTORECONNECT "autoreconnect"
 #define SER_BATTERYSAVER "batterysaver"
+#define SER_UISOUNDS "uisounds"
+#define SER_UISOUNDVOLUME "uisoundvolume"
+#define SER_LASTPCUUID "lastpcuuid"
+#define SER_CUSTOMPROFILES "customprofiles"
+#define SER_ONBOARDINGDONE "onboardingdone"
 #define SER_FRAMEINTERPOLATION "frameinterpolation"
+#define SER_AMDFRAMEINTERPOLATION "amdframeinterpolation"
 #define SER_LOGSTREAMSTATS "logstreamstats"
 #define SER_FULLSCREEN "fullscreen"
 #define SER_VSYNC "vsync"
@@ -158,7 +164,13 @@ void StreamingPreferences::reload()
     autoFramePacing = settings.value(SER_AUTOFRAMEPACING, true).toBool();
     autoReconnect = settings.value(SER_AUTORECONNECT, true).toBool();
     batterySaver = settings.value(SER_BATTERYSAVER, true).toBool();
+    uiSounds = settings.value(SER_UISOUNDS, true).toBool();
+    uiSoundVolume = qBound(0, settings.value(SER_UISOUNDVOLUME, 60).toInt(), 100);
+    lastPcUuid = settings.value(SER_LASTPCUUID).toString();
+    customProfiles = settings.value(SER_CUSTOMPROFILES, "[]").toString();
+    onboardingDone = settings.value(SER_ONBOARDINGDONE, false).toBool();
     frameInterpolation = settings.value(SER_FRAMEINTERPOLATION, false).toBool();
+    amdFrameInterpolation = settings.value(SER_AMDFRAMEINTERPOLATION, true).toBool();
     logStreamStats = settings.value(SER_LOGSTREAMSTATS, false).toBool();
     enableVsync = settings.value(SER_VSYNC, true).toBool();
     enableVrr = settings.value(SER_ENABLEVRR, false).toBool();
@@ -371,7 +383,13 @@ void StreamingPreferences::save()
     settings.setValue(SER_AUTOFRAMEPACING, autoFramePacing);
     settings.setValue(SER_AUTORECONNECT, autoReconnect);
     settings.setValue(SER_BATTERYSAVER, batterySaver);
+    settings.setValue(SER_UISOUNDS, uiSounds);
+    settings.setValue(SER_UISOUNDVOLUME, uiSoundVolume);
+    settings.setValue(SER_LASTPCUUID, lastPcUuid);
+    settings.setValue(SER_CUSTOMPROFILES, customProfiles);
+    settings.setValue(SER_ONBOARDINGDONE, onboardingDone);
     settings.setValue(SER_FRAMEINTERPOLATION, frameInterpolation);
+    settings.setValue(SER_AMDFRAMEINTERPOLATION, amdFrameInterpolation);
     settings.setValue(SER_LOGSTREAMSTATS, logStreamStats);
     settings.setValue(SER_VSYNC, enableVsync);
     settings.setValue(SER_ENABLEVRR, enableVrr);

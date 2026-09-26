@@ -273,9 +273,15 @@ public:
         return nullptr;
     }
 
-    // True if the renderer shows an interpolated frame between decoded frames
-    virtual bool isFrameInterpolationActive() {
-        return false;
+    // Name of the engine drawing an interpolated frame between decoded frames,
+    // or nullptr if frame interpolation isn't active
+    virtual const char* getFrameInterpolationEngine() {
+        return nullptr;
+    }
+
+    // Why frame interpolation isn't active although it's turned on, for the stats
+    virtual const char* getFrameInterpolationProblem() {
+        return "NOT WITH THIS RENDERER";
     }
 
     virtual bool isDirectRenderingSupported() {

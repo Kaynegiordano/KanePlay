@@ -9,13 +9,14 @@
 // result of the previous frame and zero) and refine the best one.
 //
 // Vectors are stored in full resolution pixels, one per block, on a grid that
-// is identical for all levels.
+// is identical for all levels. The third channel holds the matching cost (mean
+// luma difference per sample) that tells how much the vector can be trusted.
 
 Texture2D<float> prevLuma : register(t0);
 Texture2D<float> currLuma : register(t1);
-Texture2D<float2> coarseField : register(t2);
-Texture2D<float2> temporalField : register(t3);
-RWTexture2D<float2> outputField : register(u0);
+Texture2D<float4> coarseField : register(t2);
+Texture2D<float4> temporalField : register(t3);
+RWTexture2D<float4> outputField : register(u0);
 SamplerState linearClamp : register(s0);
 
 cbuffer MOTION_CONST_BUF : register(b0)
@@ -123,7 +124,7 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
     float bestCost = 1e30;
     float2 bestVector = float2(0, 0);
 
-    g_Prediction = searchRadius > 0 ? float2(0, 0) : coarseField[block] * levelScale;
+    g_Prediction = searchRadius > 0 ? float2(0, 0) : coarseField[block].xy * levelScale;
 
     if (searchRadius > 0) {
         uint side = (uint)searchRadius * 2 + 1;
@@ -135,7 +136,7 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
 
         // Fast pans can go beyond the search window, the previous frame knows about them
         if (hasTemporal && tid == THREADS - 1) {
-            consider(center, temporalField[block] * levelScale, bestCost, bestVector);
+            consider(center, temporalField[block].xy * levelScale, bestCost, bestVector);
         }
     }
     else {
@@ -147,10 +148,10 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
         else if (tid <= 5) {
             static const int2 neighbours[5] = { int2(0, 0), int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1) };
             int2 source = clamp(int2(block) + neighbours[tid - 1], int2(0, 0), maxBlock);
-            consider(center, coarseField[source] * levelScale, bestCost, bestVector);
+            consider(center, coarseField[source].xy * levelScale, bestCost, bestVector);
         }
         else if (tid == 6 && hasTemporal) {
-            consider(center, temporalField[block] * levelScale, bestCost, bestVector);
+            consider(center, temporalField[block].xy * levelScale, bestCost, bestVector);
         }
     }
 
@@ -164,6 +165,6 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
     }
 
     if (tid == 0) {
-        outputField[block] = bestVector / levelScale;
+        outputField[block] = float4(bestVector / levelScale, bestCost / 64.0, 0);
     }
 }
