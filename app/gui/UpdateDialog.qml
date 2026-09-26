@@ -21,6 +21,8 @@ NavigableDialog {
     property string errorText
 
     width: 580
+    // Long notes scroll, so the buttons always stay on screen
+    readonly property real notesMaxHeight: Math.max(140, (Overlay.overlay ? Overlay.overlay.height : 720) - 420)
     closePolicy: downloading ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
 
     function install() {
@@ -38,6 +40,12 @@ NavigableDialog {
         downloading = true
         UiSound.play("select")
         AutoUpdateChecker.installUpdate()
+    }
+
+    // Up and down on the gamepad scroll the notes
+    function scrollNotes(delta) {
+        var maxY = Math.max(0, notesFlickable.contentHeight - notesFlickable.height)
+        notesFlickable.contentY = Math.min(maxY, Math.max(0, notesFlickable.contentY + delta))
     }
 
     function cancel() {
@@ -110,15 +118,26 @@ NavigableDialog {
         // What's new, one line each
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: notesColumn.implicitHeight + 36
+            Layout.preferredHeight: Math.min(notesColumn.implicitHeight + 36, dialog.notesMaxHeight)
             visible: dialog.notes !== ""
             radius: 18
             color: Theme.background
 
-            ColumnLayout {
-                id: notesColumn
+            Flickable {
+                id: notesFlickable
                 anchors.fill: parent
                 anchors.margins: 18
+                contentHeight: notesColumn.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                ScrollBar.vertical: ScrollBar {
+                    policy: notesFlickable.contentHeight > notesFlickable.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                }
+
+            ColumnLayout {
+                id: notesColumn
+                width: notesFlickable.width - 12
                 spacing: 10
 
                 Repeater {
@@ -147,6 +166,7 @@ NavigableDialog {
                         }
                     }
                 }
+            }
             }
         }
 
@@ -219,6 +239,8 @@ NavigableDialog {
                 onClicked: dialog.install()
 
                 KeyNavigation.right: laterButton
+                Keys.onUpPressed: dialog.scrollNotes(-80)
+                Keys.onDownPressed: dialog.scrollNotes(80)
             }
 
             KpButton {
@@ -228,6 +250,8 @@ NavigableDialog {
                 onClicked: dialog.cancel()
 
                 KeyNavigation.left: installButton
+                Keys.onUpPressed: dialog.scrollNotes(-80)
+                Keys.onDownPressed: dialog.scrollNotes(80)
             }
         }
     }
