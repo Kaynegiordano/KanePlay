@@ -5,6 +5,7 @@
 #include "streaming/session.h"
 
 #include <QAbstractListModel>
+#include <QSet>
 
 class AppModel : public QAbstractListModel
 {
@@ -19,6 +20,7 @@ class AppModel : public QAbstractListModel
         AppIdRole,
         DirectLaunchRole,
         AppCollectorGameRole,
+        FavoriteRole,
     };
 
 public:
@@ -31,6 +33,9 @@ public:
 
     Q_INVOKABLE int getDirectLaunchAppIndex();
 
+    // Index of the app with this ID, else of the first one with this name, else -1
+    Q_INVOKABLE int findApp(int appId, const QString& name);
+
     Q_INVOKABLE int getRunningAppId();
 
     Q_INVOKABLE QString getComputerUuid();
@@ -42,6 +47,13 @@ public:
     Q_INVOKABLE void setAppHidden(int appIndex, bool hidden);
 
     Q_INVOKABLE void setAppDirectLaunch(int appIndex, bool directLaunch);
+
+    // Favorites are remembered per PC, the library can show only them
+    Q_INVOKABLE void setAppFavorite(int appIndex, bool favorite);
+
+    Q_INVOKABLE void setFavoritesOnly(bool favoritesOnly);
+
+    Q_INVOKABLE int getFavoriteCount();
 
     QVariant data(const QModelIndex &index, int role) const override;
 
@@ -70,4 +82,6 @@ private:
     QVector<NvApp> m_VisibleApps, m_AllApps;
     int m_CurrentGameId;
     bool m_ShowHiddenGames;
+    bool m_FavoritesOnly;
+    QSet<int> m_Favorites;
 };

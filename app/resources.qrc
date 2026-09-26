@@ -10,10 +10,31 @@
         <file>res/stop_FILL1_wght700_GRAD200_opsz48.svg</file>
         <file>res/no_app_image.png</file>
         <file>res/settings.svg</file>
-        <file>res/moon.svg</file>
         <file>res/arrow_left.svg</file>
         <file>res/question_mark.svg</file>
-        <file>res/moonlight.svg</file>
+        <file>res/kaneplay.svg</file>
+        <file>res/fonts/Manrope.ttf</file>
+        <file>res/fonts/Unbounded.ttf</file>
+        <file>res/fonts/OFL-Manrope.txt</file>
+        <file>res/fonts/OFL-Unbounded.txt</file>
+        <file>res/licenses/GPL-3.0.txt</file>
+        <file>res/licenses/SDL-zlib.txt</file>
+        <file>res/licenses/AMF-MIT.txt</file>
+        <file>res/licenses/LGPL-3.0.txt</file>
+        <file>res/licenses/LGPL-2.1.txt</file>
+        <file>res/licenses/Apache-2.0.txt</file>
+        <file>res/sounds/move.wav</file>
+        <file>res/sounds/select.wav</file>
+        <file>res/sounds/back.wav</file>
+        <file>res/sounds/tab.wav</file>
+        <file>res/sounds/on.wav</file>
+        <file>res/sounds/off.wav</file>
+        <file>res/sounds/launch.wav</file>
+        <file>res/sounds/connected.wav</file>
+        <file>res/sounds/notify.wav</file>
+        <file>res/sounds/error.wav</file>
+        <file>res/glow_blue.png</file>
+        <file>res/glow_violet.png</file>
         <file>res/update.svg</file>
         <file>res/baseline-help_outline-24px.svg</file>
         <file>res/baseline-error_outline-24px.svg</file>
@@ -96,6 +117,7 @@
         <file alias="d3d11_fi_interp_pixel.fxc">shaders/d3d11_fi_interp_pixel.fxc</file>
         <file alias="d3d11_fi_pyramid_cs.fxc">shaders/d3d11_fi_pyramid_cs.fxc</file>
         <file alias="d3d11_fi_motion_cs.fxc">shaders/d3d11_fi_motion_cs.fxc</file>
+        <file alias="d3d11_fi_filter_cs.fxc">shaders/d3d11_fi_filter_cs.fxc</file>
         <file alias="vt_renderer.metal">shaders/vt_renderer.metal</file>
     </qresource>
 </RCC>

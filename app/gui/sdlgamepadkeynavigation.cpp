@@ -14,7 +14,9 @@ SdlGamepadKeyNavigation::SdlGamepadKeyNavigation(StreamingPreferences* prefs)
       m_UiNavMode(false),
       m_FirstPoll(false),
       m_HasFocus(false),
-      m_LastAxisNavigationEventTime(0)
+      m_LastAxisNavigationEventTime(0),
+      m_LeftTriggerDown(false),
+      m_RightTriggerDown(false)
 {
     m_PollingTimer = new QTimer(this);
     connect(m_PollingTimer, &QTimer::timeout, this, &SdlGamepadKeyNavigation::onPollingTimerFired);
@@ -186,6 +188,13 @@ void SdlGamepadKeyNavigation::onPollingTimerFired()
             case SDL_CONTROLLER_BUTTON_X:
                 sendKey(type, Qt::Key_Menu);
                 break;
+            case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+                // LB and RB switch between the tabs of the top bar
+                sendKey(type, Qt::Key_PageUp);
+                break;
+            case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+                sendKey(type, Qt::Key_PageDown);
+                break;
             case SDL_CONTROLLER_BUTTON_Y:
             case SDL_CONTROLLER_BUTTON_START:
                 // HACK: We use this keycode to inform main.qml
@@ -216,6 +225,23 @@ void SdlGamepadKeyNavigation::onPollingTimerFired()
             break;
         }
     }
+
+    // LT and RT switch between the filters of a page, like the categories of the advanced settings
+    bool leftTrigger = false, rightTrigger = false;
+    for (auto gc : std::as_const(m_Gamepads)) {
+        leftTrigger |= SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16000;
+        rightTrigger |= SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16000;
+    }
+    if (leftTrigger && !m_LeftTriggerDown) {
+        sendKey(QEvent::Type::KeyPress, Qt::Key_BracketLeft);
+        sendKey(QEvent::Type::KeyRelease, Qt::Key_BracketLeft);
+    }
+    if (rightTrigger && !m_RightTriggerDown) {
+        sendKey(QEvent::Type::KeyPress, Qt::Key_BracketRight);
+        sendKey(QEvent::Type::KeyRelease, Qt::Key_BracketRight);
+    }
+    m_LeftTriggerDown = leftTrigger;
+    m_RightTriggerDown = rightTrigger;
 
     // Handle analog sticks by polling
     for (auto gc : std::as_const(m_Gamepads)) {

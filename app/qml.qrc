@@ -12,7 +12,6 @@
         <file>gui/NavigableMenuItem.qml</file>
         <file>gui/CliQuitStreamSegue.qml</file>
         <file>gui/CliStartStreamSegue.qml</file>
-        <file>gui/AutoResizingComboBox.qml</file>
         <file>gui/NavigableMenu.qml</file>
         <file>gui/ErrorMessageDialog.qml</file>
         <file>gui/NavigableMessageDialog.qml</file>
@@ -22,8 +21,30 @@
         <file>gui/qmldir</file>
         <file>gui/Theme.qml</file>
         <file>gui/NavPill.qml</file>
-        <file>gui/HeroButton.qml</file>
         <file>gui/GamepadHint.qml</file>
-        <file>gui/SettingsGroup.qml</file>
+        <file>gui/KpIcon.qml</file>
+        <file>gui/KpButton.qml</file>
+        <file>gui/GamepadGlyph.qml</file>
+        <file>gui/Chip.qml</file>
+        <file>gui/StatTile.qml</file>
+        <file>gui/PairingDialog.qml</file>
+        <file>gui/Icons.js</file>
+        <file>gui/FilterChip.qml</file>
+        <file>gui/LogoRing.qml</file>
+        <file>gui/ArcSpinner.qml</file>
+        <file>gui/SettingsCatalog.qml</file>
+        <file>gui/KpSwitch.qml</file>
+        <file>gui/ValuePill.qml</file>
+        <file>gui/SettingTile.qml</file>
+        <file>gui/SettingSheet.qml</file>
+        <file>gui/ProfilePicker.qml</file>
+        <file>gui/ProfileDialog.qml</file>
+        <file>gui/SpatialNav.js</file>
+        <file>gui/CustomValueDialog.qml</file>
+        <file>gui/AdvancedSettingsView.qml</file>
+        <file>gui/AddPcView.qml</file>
+        <file>gui/SessionSummaryView.qml</file>
+        <file>gui/UpdateDialog.qml</file>
+        <file>gui/AboutView.qml</file>
     </qresource>
 </RCC>

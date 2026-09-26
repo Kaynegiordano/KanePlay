@@ -1,5 +1,6 @@
-import QtQuick 2.0
-import QtQuick.Controls 2.2
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 
 import ComputerManager 1.0
 import Session 1.0
@@ -54,23 +55,56 @@ Item {
         ComputerManager.quitAppCompleted.disconnect(quitAppCompleted)
     }
 
-    Row {
-        anchors.centerIn: parent
-        spacing: 5
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.background
+    }
 
-        BusyIndicator {
-            id: stageSpinner
-            running: visible
+    ColumnLayout {
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 2 * Theme.pagePadding, 560)
+        spacing: 28
+
+        LogoRing {
+            Layout.alignment: Qt.AlignHCenter
+            size: 200
         }
 
-        Label {
-            id: stageLabel
-            height: stageSpinner.height
-            text: stageText
-            font.pointSize: 20
-            verticalAlignment: Text.AlignVCenter
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 8
 
-            wrapMode: Text.Wrap
+            Text {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: qsTr("Closing").toUpperCase()
+                font.pixelSize: 13
+                font.weight: Font.Bold
+                font.letterSpacing: 1.3
+                color: Theme.accent
+            }
+
+            Text {
+                id: stageLabel
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: appName
+                font.family: Theme.displayFont
+                font.pixelSize: 32
+                font.weight: Font.Bold
+                font.letterSpacing: -0.8
+                color: Theme.text
+                wrapMode: Text.Wrap
+            }
+
+            Text {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: qsTr("Closing the game on the PC…")
+                font.pixelSize: 15
+                color: Theme.textSecondary
+                wrapMode: Text.Wrap
+            }
         }
     }
 

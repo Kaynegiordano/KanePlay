@@ -1,7 +1,12 @@
 #include "appmodel.h"
 
+#include <QSettings>
+
+#define SER_FAVORITEAPPS "favoriteapps"
+
 AppModel::AppModel(QObject *parent)
-    : QAbstractListModel(parent)
+    : QAbstractListModel(parent),
+      m_FavoritesOnly(false)
 {
     connect(&m_BoxArtManager, &BoxArtManager::boxArtLoadComplete,
             this, &AppModel::handleBoxArtLoaded);
@@ -17,6 +22,12 @@ void AppModel::initialize(ComputerManager* computerManager, int computerIndex, b
     m_Computer = m_ComputerManager->getComputers().at(computerIndex);
     m_CurrentGameId = m_Computer->currentGameId;
     m_ShowHiddenGames = showHiddenGames;
+
+    QSettings settings;
+    settings.beginGroup(SER_FAVORITEAPPS);
+    for (const QVariant& appId : settings.value(m_Computer->uuid).toList()) {
+        m_Favorites.insert(appId.toInt());
+    }
 
     updateAppList(m_Computer->appList);
 }
@@ -63,6 +74,75 @@ int AppModel::getDirectLaunchAppIndex()
     return -1;
 }
 
+void AppModel::setAppFavorite(int appIndex, bool favorite)
+{
+    Q_ASSERT(appIndex < m_VisibleApps.count());
+    int appId = m_VisibleApps[appIndex].id;
+
+    if (favorite) {
+        m_Favorites.insert(appId);
+    }
+    else {
+        m_Favorites.remove(appId);
+    }
+
+    QVariantList favorites;
+    for (int id : std::as_const(m_Favorites)) {
+        favorites.append(id);
+    }
+    QSettings settings;
+    settings.beginGroup(SER_FAVORITEAPPS);
+    settings.setValue(m_Computer->uuid, favorites);
+
+    emit dataChanged(createIndex(appIndex, 0), createIndex(appIndex, 0), QVector<int>() << FavoriteRole);
+
+    if (m_FavoritesOnly && !favorite) {
+        updateAppList(m_AllApps);
+    }
+}
+
+void AppModel::setFavoritesOnly(bool favoritesOnly)
+{
+    if (m_FavoritesOnly == favoritesOnly) {
+        return;
+    }
+
+    // Rebuild the list from scratch, apps kept visible by the hidden games logic included
+    beginResetModel();
+    m_FavoritesOnly = favoritesOnly;
+    m_VisibleApps.clear();
+    m_VisibleApps = getVisibleApps(m_AllApps);
+    endResetModel();
+}
+
+int AppModel::getFavoriteCount()
+{
+    int count = 0;
+    for (const NvApp& app : std::as_const(m_AllApps)) {
+        if (m_Favorites.contains(app.id)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int AppModel::findApp(int appId, const QString& name)
+{
+    for (int i = 0; appId != 0 && i < m_VisibleApps.count(); i++) {
+        if (m_VisibleApps[i].id == appId) {
+            return i;
+        }
+    }
+
+    for (int i = 0; !name.isEmpty() && i < m_VisibleApps.count(); i++) {
+        if (m_VisibleApps[i].name.compare(name, Qt::CaseInsensitive) == 0) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 int AppModel::rowCount(const QModelIndex &parent) const
 {
     // For list models only the root node (an invalid parent) should return the list's size. For all
@@ -98,6 +178,8 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
         return app.directLaunch;
     case AppCollectorGameRole:
         return app.isAppCollectorGame;
+    case FavoriteRole:
+        return m_Favorites.contains(app.id);
     default:
         return QVariant();
     }
@@ -114,6 +196,7 @@ QHash<int, QByteArray> AppModel::roleNames() const
     names[AppIdRole] = "appid";
     names[DirectLaunchRole] = "directLaunch";
     names[AppCollectorGameRole] = "appCollectorGame";
+    names[FavoriteRole] = "favorite";
 
     return names;
 }
@@ -139,6 +222,10 @@ QVector<NvApp> AppModel::getVisibleApps(const QVector<NvApp>& appList)
     QVector<NvApp> visibleApps;
 
     for (const NvApp& app : appList) {
+        if (m_FavoritesOnly && !m_Favorites.contains(app.id)) {
+            continue;
+        }
+
         // Don't immediately hide games that were previously visible. This
         // allows users to easily uncheck the "Hide App" checkbox if they
         // check it by mistake.

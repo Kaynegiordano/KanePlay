@@ -42,6 +42,15 @@ QVariant ComputerModel::data(const QModelIndex& index, int role) const
         return computer->state == NvComputer::CS_UNKNOWN;
     case ServerSupportedRole:
         return computer->isSupportedServerVersion;
+    case UuidRole:
+        return computer->uuid;
+    case RunningGameRole:
+        for (const NvApp& app : computer->appList) {
+            if (app.id == computer->currentGameId) {
+                return app.name;
+            }
+        }
+        return QString();
     case DetailsRole: {
         QString state, pairState;
 
@@ -110,6 +119,8 @@ QHash<int, QByteArray> ComputerModel::roleNames() const
     names[StatusUnknownRole] = "statusUnknown";
     names[ServerSupportedRole] = "serverSupported";
     names[DetailsRole] = "details";
+    names[UuidRole] = "uuid";
+    names[RunningGameRole] = "runningGame";
 
     return names;
 }

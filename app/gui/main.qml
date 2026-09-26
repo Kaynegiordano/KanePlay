@@ -9,6 +9,7 @@ import AutoUpdateChecker 1.0
 import StreamingPreferences 1.0
 import SystemProperties 1.0
 import SdlGamepadKeyNavigation 1.0
+import UiSound 1.0
 
 ApplicationWindow {
     property bool pollingActive: false
@@ -19,10 +20,18 @@ ApplicationWindow {
     property bool clearOnBack: false
 
     id: window
+    title: "KanePlay"
     width: 1280
     height: 720
 
     color: Theme.background
+    // Windows 11 UI font for every control. Other systems fall back to their default.
+    font.family: Theme.textFont
+
+    background: Rectangle {
+        color: Theme.background
+    }
+
     Material.theme: Material.Dark
     Material.accent: Theme.accent
     Material.primary: Theme.surfaceAlt
@@ -32,6 +41,76 @@ ApplicationWindow {
     // The app library of the PC we're browsing, if any, for the top bar
     property var libraryView: null
     property int connectedGamepads: 0
+
+    // Tabs of the top bar: 0 home, 1 library, 2 settings, -1 another page
+    readonly property var homeView: stackView.depth > 0 && stackView.get(0) instanceof PcView ? stackView.get(0) : null
+    readonly property int currentTab: stackView.currentItem instanceof PcView ||
+                                      stackView.currentItem instanceof AddPcView ? 0 :
+                                      stackView.currentItem instanceof AppView ||
+                                      stackView.currentItem instanceof SessionSummaryView ? 1 :
+                                      stackView.currentItem instanceof SettingsView ||
+                                      stackView.currentItem instanceof AdvancedSettingsView ||
+                                      stackView.currentItem instanceof AboutView ? 2 : -1
+    readonly property bool canOpenLibrary: libraryView !== null || (homeView !== null && homeView.canOpenLibrary)
+
+    function selectTab(tab)
+    {
+        if (tab === 0) {
+            if (stackView.depth > 1) {
+                stackView.pop(null)
+                clearOnBack = false
+            }
+        }
+        else if (tab === 1) {
+            if (libraryView !== null) {
+                if (stackView.currentItem !== libraryView) {
+                    stackView.pop(libraryView)
+                }
+            }
+            else if (homeView !== null && homeView.canOpenLibrary) {
+                homeView.openLibrary()
+            }
+        }
+        else if (tab === 2) {
+            navigateTo("qrc:/gui/SettingsView.qml", SettingsView)
+        }
+    }
+
+    // LB and RB (Page Up and Page Down) move between the tabs
+    function switchTab(direction)
+    {
+        var tab = (currentTab < 0 ? 0 : currentTab) + direction
+        if (tab === 1 && !canOpenLibrary) {
+            tab += direction
+        }
+        if (tab < 0 || tab > 2 || tab === currentTab) {
+            return
+        }
+
+        UiSound.play("tab")
+        selectTab(tab)
+    }
+
+    Shortcut {
+        sequence: "PgUp"
+        onActivated: switchTab(-1)
+    }
+
+    Shortcut {
+        sequence: "PgDown"
+        onActivated: switchTab(1)
+    }
+
+    function openAddPc()
+    {
+        if (!(stackView.currentItem instanceof AddPcView)) {
+            UiSound.play("select")
+            stackView.push("qrc:/gui/AddPcView.qml")
+        }
+    }
+
+    // Keyboard and gamepad navigation ticks softly
+    onActiveFocusItemChanged: UiSound.focusMoved()
 
     function findLibraryView() {
         return stackView.find(function(item, index) {
@@ -120,6 +199,22 @@ ApplicationWindow {
         id: stackView
         anchors.fill: parent
         focus: true
+
+        // Pages slide in by 24 px while fading, the way tabs change in the design
+        pushEnter: Transition {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durationStandard; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+            NumberAnimation { property: "x"; from: Theme.motion ? 24 : 0; to: 0; duration: Theme.durationStandard; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+        }
+        pushExit: Transition {
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.durationFast }
+        }
+        popEnter: Transition {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durationStandard; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+            NumberAnimation { property: "x"; from: Theme.motion ? -24 : 0; to: 0; duration: Theme.durationStandard; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+        }
+        popExit: Transition {
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.durationFast }
+        }
 
         Component.onCompleted: {
             // Perform our early initialization before constructing
@@ -245,232 +340,135 @@ ApplicationWindow {
         }
     }
 
-    header: Rectangle {
+    header: Item {
         id: toolBar
-        height: 84
-        color: Theme.background
+        height: 76
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 24
-            anchors.rightMargin: 24
-            spacing: 8
+        // Logo and name
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.pagePadding
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 12
 
-            NavigableToolButton {
-                // Only make the button visible if the user has navigated somewhere.
-                visible: stackView.depth > 1
-                Layout.preferredHeight: 48
-                Layout.preferredWidth: 48
-
-                iconSource: "qrc:/res/arrow_left.svg"
-
-                onClicked: goBack()
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                source: "qrc:/res/kaneplay.svg"
+                sourceSize.width: 34
+                sourceSize.height: 34
             }
 
-            Row {
-                spacing: 12
-                Layout.rightMargin: 20
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                // Hidden on narrow windows so the tabs keep their room
+                visible: toolBar.width > 960
+                text: "KanePlay"
+                font.family: Theme.displayFont
+                font.pixelSize: 19
+                font.weight: Font.Bold
+                font.letterSpacing: -0.4
+                color: Theme.text
+            }
+        }
 
-                Image {
-                    source: "qrc:/res/moon.svg"
-                    sourceSize.width: 30
-                    sourceSize.height: 30
-                    anchors.verticalCenter: parent.verticalCenter
-                }
+        // Tabs, switched with LB and RB on a gamepad
+        Row {
+            anchors.centerIn: parent
+            spacing: 10
 
-                Text {
-                    // Hidden on narrow windows so the tabs keep their room
-                    visible: toolBar.width > 900
-                    text: "Moonlight"
-                    font.family: Theme.displayFont
-                    font.pointSize: 17
-                    font.weight: Font.Bold
-                    color: Theme.text
-                    anchors.verticalCenter: parent.verticalCenter
-                }
+            GamepadGlyph {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: connectedGamepads > 0
+                glyph: "LB"
             }
 
-            NavPill {
-                id: pcPill
-                text: qsTr("PCs")
-                visible: stackView.depth > 0 && stackView.get(0) instanceof PcView
-                selected: stackView.currentItem instanceof PcView
-                onClicked: {
-                    if (stackView.depth > 1) {
-                        stackView.pop(null)
-                        clearOnBack = false
-                    }
-                }
-            }
-
-            NavPill {
-                id: libraryPill
-                text: qsTr("Library")
-                visible: libraryView !== null
-                selected: libraryView !== null && stackView.currentItem === libraryView
-                onClicked: {
-                    if (libraryView !== null && stackView.currentItem !== libraryView) {
-                        stackView.pop(libraryView)
-                    }
-                }
-            }
-
-            NavPill {
-                id: settingsButton
-                text: qsTr("Settings")
-                selected: stackView.currentItem instanceof SettingsView
-
-                onClicked: navigateTo("qrc:/gui/SettingsView.qml", SettingsView)
-
-                Shortcut {
-                    id: settingsShortcut
-                    sequence: StandardKey.Preferences
-                    onActivated: settingsButton.clicked()
-                }
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            // The PC whose library we're browsing
             Rectangle {
-                visible: libraryView !== null && toolBar.width > 1000
-                implicitWidth: hostRow.implicitWidth + 32
-                implicitHeight: 52
-                radius: Theme.radius
-                color: Theme.surfaceAlt
+                anchors.verticalCenter: parent.verticalCenter
+                width: tabRow.implicitWidth + 8
+                height: 48
+                radius: 24
+                color: Theme.surface
                 border.width: 1
                 border.color: Theme.border
 
                 Row {
-                    id: hostRow
+                    id: tabRow
                     anchors.centerIn: parent
-                    spacing: 12
+                    spacing: 4
 
-                    Rectangle {
-                        width: 10
-                        height: 10
-                        radius: 5
-                        color: Theme.success
-                        anchors.verticalCenter: parent.verticalCenter
+                    NavPill {
+                        id: pcPill
+                        text: qsTr("Home")
+                        selected: currentTab === 0
+                        onClicked: selectTab(0)
                     }
 
-                    Column {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 2
+                    NavPill {
+                        id: libraryPill
+                        text: qsTr("Library")
+                        enabled: canOpenLibrary
+                        opacity: enabled ? 1 : 0.4
+                        selected: currentTab === 1
+                        onClicked: selectTab(1)
+                    }
 
-                        Text {
-                            text: libraryView !== null ? libraryView.objectName : ""
-                            font.family: Theme.textFont
-                            font.pointSize: 11
-                            font.weight: Font.Bold
-                            color: Theme.text
-                        }
+                    NavPill {
+                        id: settingsButton
+                        text: qsTr("Settings")
+                        selected: currentTab === 2
+                        onClicked: selectTab(2)
 
-                        Text {
-                            text: qsTr("Connected")
-                            font.family: Theme.textFont
-                            font.pointSize: 9
-                            color: Theme.textSecondary
+                        Shortcut {
+                            id: settingsShortcut
+                            sequence: StandardKey.Preferences
+                            onActivated: settingsButton.clicked()
                         }
                     }
                 }
             }
 
-            Label {
-                id: versionLabel
-                visible: stackView.currentItem instanceof SettingsView
-                text: qsTr("Version %1").arg(SystemProperties.versionString)
-                font.family: Theme.textFont
-                font.pointSize: 11
-                color: Theme.textSecondary
-                horizontalAlignment: Qt.AlignRight
-                verticalAlignment: Qt.AlignVCenter
+            GamepadGlyph {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: connectedGamepads > 0
+                glyph: "RB"
             }
+        }
 
-            NavigableToolButton {
-                id: discordButton
-                visible: SystemProperties.hasBrowser &&
-                         stackView.currentItem instanceof SettingsView
-                Layout.preferredHeight: 48
-                Layout.preferredWidth: 48
+        // Actions
+        Row {
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.pagePadding
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 8
 
-                iconSource: "qrc:/res/discord.svg"
-
-                ToolTip.delay: 1000
-                ToolTip.timeout: 3000
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Join our community on Discord")
-
-                // TODO need to make sure browser is brought to foreground.
-                onClicked: Qt.openUrlExternally("https://moonlight-stream.org/discord");
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
-            }
-
-            NavigableToolButton {
-                id: addPcButton
-                visible: stackView.currentItem instanceof PcView
-                Layout.preferredHeight: 48
-                Layout.preferredWidth: 48
-
-                iconSource:  "qrc:/res/ic_add_to_queue_white_48px.svg"
-
-                ToolTip.delay: 1000
-                ToolTip.timeout: 3000
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Add PC manually") + (newPcShortcut.nativeText ? (" ("+newPcShortcut.nativeText+")") : "")
-
-                Shortcut {
-                    id: newPcShortcut
-                    sequence: StandardKey.New
-                    onActivated: addPcButton.clicked()
-                }
-
-                onClicked: {
-                    addPcDialog.open()
-                }
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
-            }
-
-            NavigableToolButton {
+            KpButton {
                 property string browserUrl: ""
 
                 id: updateButton
-                Layout.preferredHeight: 48
-                Layout.preferredWidth: 48
-
-                iconSource: "qrc:/res/update.svg"
+                round: true
+                variant: "primary"
+                iconName: "download"
+                implicitHeight: 44
+                sound: ""
 
                 ToolTip.delay: 1000
                 ToolTip.timeout: 3000
-                ToolTip.visible: hovered || visible
+                ToolTip.visible: hovered
 
                 // Invisible until we get a callback notifying us that
                 // an update is available
                 visible: false
 
-                onClicked: {
-                    if (SystemProperties.hasBrowser) {
-                        Qt.openUrlExternally(browserUrl);
-                    }
-                }
+                onClicked: updateDialog.open()
 
                 function updateAvailable(version, url)
                 {
-                    ToolTip.text = qsTr("Update available for Moonlight: Version %1").arg(version)
+                    ToolTip.text = qsTr("Update available for KanePlay: version %1").arg(version)
                     updateButton.browserUrl = url
                     updateButton.visible = true
+                    updateDialog.version = version
+                    updateDialog.browserUrl = url
+                    UiSound.play("notify")
                 }
 
                 Component.onCompleted: {
@@ -483,13 +481,37 @@ ApplicationWindow {
                 }
             }
 
-            NavigableToolButton {
+            KpButton {
+                id: addPcButton
+                visible: currentTab === 0
+                round: true
+                iconName: "plus"
+                implicitHeight: 44
+
+                ToolTip.delay: 1000
+                ToolTip.timeout: 3000
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Add PC manually") + (newPcShortcut.nativeText ? (" ("+newPcShortcut.nativeText+")") : "")
+
+                Shortcut {
+                    id: newPcShortcut
+                    sequence: StandardKey.New
+                    onActivated: addPcButton.clicked()
+                }
+
+                onClicked: openAddPc()
+
+                Keys.onDownPressed: {
+                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
+                }
+            }
+
+            KpButton {
                 id: helpButton
                 visible: SystemProperties.hasBrowser
-                Layout.preferredHeight: 48
-                Layout.preferredWidth: 48
-
-                iconSource: "qrc:/res/question_mark.svg"
+                round: true
+                iconName: "help"
+                implicitHeight: 44
 
                 ToolTip.delay: 1000
                 ToolTip.timeout: 3000
@@ -512,11 +534,18 @@ ApplicationWindow {
         }
     }
 
+    // Hints of the default pages; a page can list its own in gamepadHints
+    readonly property var defaultGamepadHints: [
+        { glyph: "A", label: stackView.currentItem instanceof AppView ? qsTr("Play") :
+                             stackView.currentItem instanceof SettingsView ? qsTr("Change") : qsTr("Select"), accent: true },
+        { glyph: "X", label: qsTr("Options") },
+        { glyph: "B", label: stackView.depth > 1 ? qsTr("Back") : qsTr("Quit") }
+    ]
+
     // Gamepad button hints, shown while a gamepad is connected (always on handhelds)
-    footer: Rectangle {
-        visible: connectedGamepads > 0
-        height: visible ? 56 : 0
-        color: Theme.background
+    footer: Item {
+        visible: connectedGamepads > 0 && hintRepeater.count > 0
+        height: visible ? 52 : 0
 
         Rectangle {
             width: parent.width
@@ -525,32 +554,21 @@ ApplicationWindow {
         }
 
         Row {
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.pagePadding
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.pagePadding
             anchors.verticalCenter: parent.verticalCenter
             spacing: 28
 
-            GamepadHint {
-                glyph: "A"
-                label: stackView.currentItem instanceof AppView ? qsTr("Play") :
-                       stackView.currentItem instanceof SettingsView ? qsTr("Change") : qsTr("Select")
-            }
+            Repeater {
+                id: hintRepeater
+                model: stackView.currentItem && stackView.currentItem.gamepadHints !== undefined ?
+                           stackView.currentItem.gamepadHints : defaultGamepadHints
 
-            GamepadHint {
-                glyph: "X"
-                label: qsTr("Options")
-                visible: !(stackView.currentItem instanceof SettingsView)
-            }
-
-            GamepadHint {
-                glyph: "Y"
-                label: qsTr("Settings")
-                visible: !(stackView.currentItem instanceof SettingsView)
-            }
-
-            GamepadHint {
-                glyph: "B"
-                label: stackView.depth > 1 ? qsTr("Back") : qsTr("Quit")
+                GamepadHint {
+                    glyph: modelData.glyph
+                    label: modelData.label
+                    accent: modelData.accent === true
+                }
             }
         }
     }
@@ -566,7 +584,7 @@ ApplicationWindow {
 
     ErrorMessageDialog {
         id: noHwDecoderDialog
-        text: qsTr("No functioning hardware accelerated video decoder was detected by Moonlight. " +
+        text: qsTr("No functioning hardware accelerated video decoder was detected by KanePlay. " +
                    "Your streaming performance may be severely degraded in this configuration.")
         helpText: qsTr("Click the Help button for more information on solving this problem.")
         helpUrl: "https://github.com/moonlight-stream/moonlight-docs/wiki/Fixing-Hardware-Decoding-Problems"
@@ -583,7 +601,7 @@ ApplicationWindow {
     NavigableMessageDialog {
         id: wow64Dialog
         standardButtons: Dialog.Ok | Dialog.Cancel
-        text: qsTr("This version of Moonlight isn't optimized for your PC. Please download the '%1' version of Moonlight for the best streaming performance.").arg(SystemProperties.friendlyNativeArchName)
+        text: qsTr("This version of KanePlay isn't optimized for your PC. Please download the '%1' version of KanePlay for the best streaming performance.").arg(SystemProperties.friendlyNativeArchName)
         onAccepted: {
             Qt.openUrlExternally("https://github.com/moonlight-stream/moonlight-qt/releases");
         }
@@ -592,7 +610,7 @@ ApplicationWindow {
     ErrorMessageDialog {
         id: unmappedGamepadDialog
         property string unmappedGamepads : ""
-        text: qsTr("Moonlight detected gamepads without a mapping:") + "\n" + unmappedGamepads
+        text: qsTr("KanePlay detected gamepads without a mapping:") + "\n" + unmappedGamepads
         helpTextSeparator: "\n\n"
         helpText: qsTr("Click the Help button for information on how to map your gamepads.")
         helpUrl: "https://github.com/moonlight-stream/moonlight-docs/wiki/Gamepad-Mapping"
@@ -630,46 +648,7 @@ ApplicationWindow {
         }
     }
 
-    NavigableDialog {
-        id: addPcDialog
-        property string label: qsTr("Enter the IP address of your host PC:")
-
-        standardButtons: Dialog.Ok | Dialog.Cancel
-
-        onOpened: {
-            // Force keyboard focus on the textbox so keyboard navigation works
-            editText.forceActiveFocus()
-        }
-
-        onClosed: {
-            editText.clear()
-        }
-
-        onAccepted: {
-            if (editText.text) {
-                ComputerManager.addNewHostManually(editText.text.trim())
-            }
-        }
-
-        ColumnLayout {
-            Label {
-                text: addPcDialog.label
-                font.bold: true
-            }
-
-            TextField {
-                id: editText
-                Layout.fillWidth: true
-                focus: true
-
-                Keys.onReturnPressed: {
-                    addPcDialog.accept()
-                }
-
-                Keys.onEnterPressed: {
-                    addPcDialog.accept()
-                }
-            }
-        }
+    UpdateDialog {
+        id: updateDialog
     }
 }

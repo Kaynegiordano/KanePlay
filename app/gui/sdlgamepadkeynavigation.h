@@ -43,4 +43,7 @@ private:
     bool m_FirstPoll;
     bool m_HasFocus;
     Uint32 m_LastAxisNavigationEventTime;
+    // LT and RT act like buttons, pressed once pulled halfway
+    bool m_LeftTriggerDown;
+    bool m_RightTriggerDown;
 };

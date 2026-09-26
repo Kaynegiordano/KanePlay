@@ -20,6 +20,8 @@ public:
     Q_PROPERTY(bool isRunningWayland MEMBER isRunningWayland CONSTANT)
     Q_PROPERTY(bool isRunningXWayland MEMBER isRunningXWayland CONSTANT)
     Q_PROPERTY(bool isWow64 MEMBER isWow64 CONSTANT)
+    // The OS asks apps to keep animations to a minimum
+    Q_PROPERTY(bool reducedMotion MEMBER reducedMotion CONSTANT)
     Q_PROPERTY(bool isDarwin MEMBER isDarwin CONSTANT)
     Q_PROPERTY(QString friendlyNativeArchName MEMBER friendlyNativeArchName CONSTANT)
     Q_PROPERTY(bool hasDesktopEnvironment MEMBER hasDesktopEnvironment CONSTANT)
@@ -64,6 +66,7 @@ private:
     bool isRunningWayland;
     bool isRunningXWayland;
     bool isWow64;
+    bool reducedMotion;
     QString friendlyNativeArchName;
     bool hasDesktopEnvironment;
     bool hasBrowser;

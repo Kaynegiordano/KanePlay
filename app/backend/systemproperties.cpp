@@ -53,6 +53,15 @@ SystemProperties::SystemProperties()
     isRunningWayland = WMUtils::isRunningWayland();
     isRunningXWayland = isRunningWayland && QGuiApplication::platformName() == "xcb";
     usesMaterial3Theme = QLibraryInfo::version() >= QVersionNumber(6, 5, 0);
+    reducedMotion = false;
+
+#ifdef Q_OS_WIN32
+    // "Animation effects" in the accessibility settings of Windows
+    BOOL clientAreaAnimation = TRUE;
+    if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &clientAreaAnimation, 0)) {
+        reducedMotion = !clientAreaAnimation;
+    }
+#endif
 
 #ifdef Q_OS_DARWIN
     isDarwin = true;
@@ -100,11 +109,8 @@ SystemProperties::SystemProperties()
     // Assume we can probably launch a browser if we're in a GUI environment
     hasBrowser = hasDesktopEnvironment;
 
-#ifdef HAVE_DISCORD
-    hasDiscordIntegration = true;
-#else
+    // Off until KanePlay has a Discord application, see RichPresenceManager
     hasDiscordIntegration = false;
-#endif
 
     // These will be queried asynchronously to avoid blocking the UI
     hasHardwareAcceleration = true;
