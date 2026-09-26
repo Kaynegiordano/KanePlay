@@ -18,31 +18,7 @@
 #ifdef Q_OS_WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#include <dxgi.h>
-#include <wrl/client.h>
 #endif
-
-
-static bool detectAmdGpu()
-{
-#ifdef Q_OS_WIN32
-    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
-    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
-        return false;
-    }
-
-    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-    for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
-        DXGI_ADAPTER_DESC1 desc;
-        if (SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
-                desc.VendorId == 0x1002) {
-            return true;
-        }
-        adapter.Reset();
-    }
-#endif
-    return false;
-}
 
 class SystemPropertyQueryThread : public QThread
 {
@@ -142,7 +118,6 @@ SystemProperties::SystemProperties()
     // Off until KanePlay has a Discord application, see RichPresenceManager
     hasDiscordIntegration = false;
 
-    hasAmdGpu = detectAmdGpu();
 
     // These will be queried asynchronously to avoid blocking the UI
     hasHardwareAcceleration = true;
@@ -154,28 +129,6 @@ SystemProperties::SystemProperties()
 SystemProperties::~SystemProperties()
 {
     waitForAsyncLoad();
-}
-
-bool SystemProperties::launchAmdSoftware()
-{
-#ifdef Q_OS_WIN32
-    // AMD Software: Adrenalin Edition, where Fluid Motion Frames is turned on
-    QStringList candidates;
-    QSettings amd("HKEY_LOCAL_MACHINE\\SOFTWARE\\AMD\\CN", QSettings::NativeFormat);
-    QString installDir = amd.value("InstallDir").toString();
-    if (!installDir.isEmpty()) {
-        candidates << installDir + "/RadeonSoftware.exe";
-    }
-    candidates << qEnvironmentVariable("ProgramFiles") + "/AMD/CNext/CNext/RadeonSoftware.exe";
-
-    for (const QString& candidate : candidates) {
-        if (QFileInfo::exists(candidate) &&
-                QProcess::startDetached(candidate, QStringList(), QFileInfo(candidate).absolutePath())) {
-            return true;
-        }
-    }
-#endif
-    return false;
 }
 
 bool SystemProperties::isLosslessScalingInstalled()

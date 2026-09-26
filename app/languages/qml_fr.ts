@@ -1655,12 +1655,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+552"/>
+        <location line="+542"/>
         <source>Audio</source>
         <translation>Son</translation>
     </message>
     <message>
-        <location line="-551"/>
+        <location line="-541"/>
         <source>Gamepads</source>
         <translation>Manettes</translation>
     </message>
@@ -1681,7 +1681,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+577"/>
+        <location line="+567"/>
         <source>Off</source>
         <translation>Désactivé</translation>
     </message>
@@ -1690,7 +1690,7 @@
         <translation type="vanished">Coupée par le doubleur d’images · A coupe le doubleur</translation>
     </message>
     <message>
-        <location line="-539"/>
+        <location line="-529"/>
         <source>Needs V-Sync · A turns it on</source>
         <translation>Nécessite la synchro verticale · A l’active</translation>
     </message>
@@ -1699,12 +1699,12 @@
         <location line="+52"/>
         <location line="+68"/>
         <location line="+99"/>
-        <location line="+296"/>
+        <location line="+286"/>
         <source>Automatic</source>
         <translation>Automatique</translation>
     </message>
     <message>
-        <location line="-499"/>
+        <location line="-489"/>
         <source>Native (%1)</source>
         <translation>Native (%1)</translation>
     </message>
@@ -1737,12 +1737,12 @@
     </message>
     <message>
         <location line="-6"/>
-        <location line="+639"/>
+        <location line="+629"/>
         <source>%1 FPS</source>
         <translation>%1 i/s</translation>
     </message>
     <message>
-        <location line="-621"/>
+        <location line="-611"/>
         <source>Resolution</source>
         <translation>Résolution</translation>
     </message>
@@ -1859,24 +1859,24 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+271"/>
+        <location line="+261"/>
         <location line="+112"/>
         <source>Fullscreen</source>
         <translation>Plein écran</translation>
     </message>
     <message>
-        <location line="-382"/>
+        <location line="-372"/>
         <source>Borderless</source>
         <translation>Sans bordure</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+379"/>
+        <location line="+369"/>
         <source>Windowed</source>
         <translation>Fenêtré</translation>
     </message>
     <message>
-        <location line="-370"/>
+        <location line="-360"/>
         <source>Video decoder</source>
         <translation>Décodeur vidéo</translation>
     </message>
@@ -1951,16 +1951,15 @@
         <translation>Génération d’images</translation>
     </message>
     <message>
-        <location line="+417"/>
         <source>AMD Fluid Motion Frames</source>
-        <translation>AMD Fluid Motion Frames</translation>
+        <translation type="vanished">AMD Fluid Motion Frames</translation>
     </message>
     <message>
         <source>Opens AMD Software: turn AFMF on for KanePlay</source>
         <translation type="vanished">Ouvre AMD Software : active AFMF pour KanePlay</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+415"/>
         <location line="+15"/>
         <source>Lossless Scaling</source>
         <translation>Lossless Scaling</translation>
@@ -1970,17 +1969,15 @@
         <translation type="vanished">Ouvre Lossless Scaling, puis Ctrl+Alt+S sur KanePlay</translation>
     </message>
     <message>
-        <location line="-22"/>
         <source>In AMD Software: Gaming › KanePlay › AFMF</source>
-        <translation>Dans AMD Software : Jeux › KanePlay › AFMF</translation>
+        <translation type="vanished">Dans AMD Software : Jeux › KanePlay › AFMF</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open</source>
-        <translation>Ouvrir</translation>
+        <translation type="vanished">Ouvrir</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-14"/>
         <source>Turned on for the stream, with its frame generation</source>
         <translation>Activé pendant le stream, avec sa génération d’images</translation>
     </message>

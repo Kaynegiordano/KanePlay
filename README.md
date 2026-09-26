@@ -16,9 +16,8 @@ report KanePlay issues to them.
   latency of the session, animations and interface sounds.
 - **Streaming profiles**: Performance, Quality, Battery and Weak network, plus your
   own profiles with a name and a color.
-- **Frame generation** is left to the tools that do it well: the settings open
-  AMD Software, to turn AMD Fluid Motion Frames on for KanePlay (AMD graphics),
-  or Lossless Scaling.
+- **Frame generation** through Lossless Scaling: turned on for the stream from
+  the settings, or bought on Steam from there.
 - **In-game menu** (Start + Select): stats, gamepad mouse, diagnostic capture
   and disconnect, without leaving the game.
 - **Automatic reconnection** when the network drops, a **battery saver**, and a

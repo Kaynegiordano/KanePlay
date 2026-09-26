@@ -171,7 +171,7 @@ void StreamingPreferences::reload()
     lastPcUuid = settings.value(SER_LASTPCUUID).toString();
     customProfiles = settings.value(SER_CUSTOMPROFILES, "[]").toString();
     onboardingDone = settings.value(SER_ONBOARDINGDONE, false).toBool();
-    // The built-in frame doubler is gone: AFMF or Lossless Scaling do it better
+    // The built-in frame doubler is gone: Lossless Scaling does it better
     frameInterpolation = false;
     amdFrameInterpolation = settings.value(SER_AMDFRAMEINTERPOLATION, true).toBool();
     logStreamStats = settings.value(SER_LOGSTREAMSTATS, false).toBool();

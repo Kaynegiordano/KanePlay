@@ -29,8 +29,6 @@ public:
     Q_PROPERTY(bool hasDiscordIntegration MEMBER hasDiscordIntegration CONSTANT)
     Q_PROPERTY(bool usesMaterial3Theme MEMBER usesMaterial3Theme CONSTANT)
     Q_PROPERTY(QString versionString MEMBER versionString CONSTANT)
-    // An AMD GPU, for AMD Fluid Motion Frames
-    Q_PROPERTY(bool hasAmdGpu MEMBER hasAmdGpu CONSTANT)
 
     // Properties queried asynchronously (startAsyncLoad() must be called!)
     Q_PROPERTY(bool hasHardwareAcceleration MEMBER hasHardwareAcceleration NOTIFY hasHardwareAccelerationChanged)
@@ -50,9 +48,8 @@ public:
     Q_INVOKABLE void waitForAsyncLoad();
     Q_INVOKABLE void refreshDisplays();
 
-    // Frame generation is left to other apps, which KanePlay starts.
-    // They return false if the app can't be found or started.
-    Q_INVOKABLE bool launchAmdSoftware();
+    // Frame generation is left to Lossless Scaling, which KanePlay starts.
+    // They return false if it can't be found or started.
     Q_INVOKABLE bool isLosslessScalingInstalled();
     // Starts it unless it's running already
     Q_INVOKABLE bool startLosslessScaling();
@@ -83,7 +80,6 @@ private:
     bool hasBrowser;
     bool hasDiscordIntegration;
     QString versionString;
-    bool hasAmdGpu;
     bool usesMaterial3Theme;
     bool isDarwin;
 

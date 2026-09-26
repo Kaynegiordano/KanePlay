@@ -441,17 +441,7 @@ QtObject {
                 def: function() { return false }
             },
 
-            // Frame generation, left to other apps that do it well.
-            // AMD only lets its own software turn AFMF on: a KanePlay game
-            // profile there keeps it to KanePlay.
-            {
-                key: "amdFluidMotionFrames", category: "framegen", icon: "layers", type: "action",
-                label: qsTr("AMD Fluid Motion Frames"),
-                desc: qsTr("In AMD Software: Gaming › KanePlay › AFMF"),
-                actionLabel: qsTr("Open"),
-                available: function() { return Qt.platform.os === "windows" && SystemProperties.hasAmdGpu },
-                run: function() { return SystemProperties.launchAmdSoftware() }
-            },
+            // Frame generation, left to Lossless Scaling
             {
                 key: "losslessScaling", category: "framegen", icon: "layers", type: "bool",
                 label: qsTr("Lossless Scaling"),
