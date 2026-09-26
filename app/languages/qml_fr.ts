@@ -188,7 +188,7 @@
 <context>
     <name>AppView</name>
     <message>
-        <location filename="../gui/AppView.qml" line="+776"/>
+        <location filename="../gui/AppView.qml" line="+773"/>
         <source>Resume Game</source>
         <translation>Reprendre le jeu</translation>
     </message>
@@ -203,19 +203,19 @@
         <translation>Lancer le jeu</translation>
     </message>
     <message>
-        <location line="-737"/>
-        <location line="+669"/>
+        <location line="-734"/>
+        <location line="+666"/>
         <source>Resume</source>
         <translation>Reprendre</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+669"/>
+        <location line="-666"/>
+        <location line="+666"/>
         <source>Play</source>
         <translation>Jouer</translation>
     </message>
     <message>
-        <location line="-667"/>
+        <location line="-664"/>
         <source>Back</source>
         <translation>Retour</translation>
     </message>
@@ -230,7 +230,7 @@
         <translation>Auto</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+106"/>
         <source>All</source>
         <translation>Tout</translation>
     </message>
@@ -338,7 +338,7 @@
         <translation type="vanished">Résolution automatique</translation>
     </message>
     <message>
-        <location line="-725"/>
+        <location line="-722"/>
         <source>Automatic FPS</source>
         <translation>FPS automatiques</translation>
     </message>
@@ -609,6 +609,7 @@
         <translation>Doubleur ×2</translation>
     </message>
     <message>
+        <location line="+5"/>
         <source>Duplicate decoded frames (test)</source>
         <translation>Dupliquer les images décodées (test)</translation>
     </message>
@@ -711,7 +712,7 @@
         <translation type="vanished">Recherche d&apos;hôtes compatibles sur votre réseau local...</translation>
     </message>
     <message>
-        <location line="+849"/>
+        <location line="+843"/>
         <source>Wake PC</source>
         <translation>Réveiller le PC</translation>
     </message>
@@ -736,12 +737,12 @@
         <translation>Voir les détails</translation>
     </message>
     <message>
-        <location line="-923"/>
+        <location line="-917"/>
         <source>The version of GeForce Experience on %1 is not supported by this build of KanePlay. You must update KanePlay to stream from %1.</source>
         <translation>La version de GeForce Experience installée sur %1 n&apos;est pas supportée par cette version de KanePlay. Vous devez mettre à jour KanePlay pour streamer depuis %1.</translation>
     </message>
     <message>
-        <location line="+962"/>
+        <location line="+956"/>
         <source>This may take a few seconds…</source>
         <translation>Cela peut prendre quelques secondes…</translation>
     </message>
@@ -771,7 +772,7 @@
         <translation type="vanished">Statut du PC&#x202f;: %1</translation>
     </message>
     <message>
-        <location line="-1059"/>
+        <location line="-1053"/>
         <source>Online</source>
         <translation>En ligne</translation>
     </message>
@@ -951,12 +952,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+297"/>
+        <location line="+291"/>
         <source>Add a PC</source>
         <translation>Ajouter un PC</translation>
     </message>
     <message>
-        <location line="-284"/>
+        <location line="-278"/>
         <source>Playing now</source>
         <translation>En cours</translation>
     </message>
@@ -981,12 +982,11 @@
         <translation>%1 i/s</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Frame doubler ×2</source>
-        <translation>Doubleur ×2</translation>
+        <translation type="vanished">Doubleur ×2</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+28"/>
         <source>This PC is asleep or turned off. KanePlay can wake it up if it is plugged into the network.</source>
         <translation>Ce PC est en veille ou éteint. KanePlay peut le réveiller s’il est branché au réseau.</translation>
     </message>
@@ -1119,7 +1119,7 @@
         <translation type="vanished">Choisissez le PC depuis lequel streamer. Appuyez sur X ou faites un clic droit sur un PC pour plus d&apos;options.</translation>
     </message>
     <message>
-        <location line="-1074"/>
+        <location line="-1068"/>
         <location line="+364"/>
         <source>Checking…</source>
         <translation>Vérification…</translation>
@@ -1532,12 +1532,11 @@
         <translation>i/s moy.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Frame doubler on</source>
-        <translation>Doubleur activé</translation>
+        <translation type="vanished">Doubleur activé</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>Latency</source>
         <translation>Latence</translation>
     </message>
@@ -1626,6 +1625,14 @@
     </message>
 </context>
 <context>
+    <name>SettingTile</name>
+    <message>
+        <location filename="../gui/SettingTile.qml" line="+173"/>
+        <source>Open</source>
+        <translation>Ouvrir</translation>
+    </message>
+</context>
+<context>
     <name>SettingsCatalog</name>
     <message>
         <location filename="../gui/SettingsCatalog.qml" line="+31"/>
@@ -1633,12 +1640,11 @@
         <translation>Tout</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Frame doubler</source>
-        <translation>Doubleur d’images</translation>
+        <translation type="vanished">Doubleur d’images</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Picture</source>
         <translation>Image</translation>
     </message>
@@ -1649,12 +1655,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+560"/>
+        <location line="+534"/>
         <source>Audio</source>
         <translation>Son</translation>
     </message>
     <message>
-        <location line="-559"/>
+        <location line="-533"/>
         <source>Gamepads</source>
         <translation>Manettes</translation>
     </message>
@@ -1675,7 +1681,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+585"/>
+        <location line="+559"/>
         <source>Off</source>
         <translation>Désactivé</translation>
     </message>
@@ -1684,21 +1690,21 @@
         <translation type="vanished">Coupée par le doubleur d’images · A coupe le doubleur</translation>
     </message>
     <message>
-        <location line="-546"/>
+        <location line="-521"/>
         <source>Needs V-Sync · A turns it on</source>
         <translation>Nécessite la synchro verticale · A l’active</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+65"/>
         <location line="+52"/>
-        <location line="+69"/>
-        <location line="+102"/>
-        <location line="+284"/>
+        <location line="+68"/>
+        <location line="+99"/>
+        <location line="+278"/>
         <source>Automatic</source>
         <translation>Automatique</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-481"/>
         <source>Native (%1)</source>
         <translation>Native (%1)</translation>
     </message>
@@ -1731,12 +1737,12 @@
     </message>
     <message>
         <location line="-6"/>
-        <location line="+631"/>
+        <location line="+621"/>
         <source>%1 FPS</source>
         <translation>%1 i/s</translation>
     </message>
     <message>
-        <location line="-613"/>
+        <location line="-603"/>
         <source>Resolution</source>
         <translation>Résolution</translation>
     </message>
@@ -1756,7 +1762,7 @@
         <translation>Plus haut : plus fluide, mais plus de débit et un PC plus rapide.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+18"/>
         <source>Video codec</source>
         <translation>Codec vidéo</translation>
     </message>
@@ -1827,7 +1833,7 @@
         <translation>Fréquence variable, demande la synchro verticale</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+10"/>
         <source>Display mode</source>
         <translation>Mode d’affichage</translation>
     </message>
@@ -1853,24 +1859,24 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+259"/>
+        <location line="+253"/>
         <location line="+112"/>
         <source>Fullscreen</source>
         <translation>Plein écran</translation>
     </message>
     <message>
-        <location line="-370"/>
+        <location line="-364"/>
         <source>Borderless</source>
         <translation>Sans bordure</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+367"/>
+        <location line="+361"/>
         <source>Windowed</source>
         <translation>Fenêtré</translation>
     </message>
     <message>
-        <location line="-358"/>
+        <location line="-352"/>
         <source>Video decoder</source>
         <translation>Décodeur vidéo</translation>
     </message>
@@ -1899,16 +1905,15 @@
         <translation type="vanished">Texte plus net, plus de débit</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Frame doubler ×2</source>
-        <translation>Doubleur ×2</translation>
+        <translation type="vanished">Doubleur ×2</translation>
     </message>
     <message>
         <source>Draws a frame between two: 60 FPS are shown at 120</source>
         <translation type="vanished">Crée une image entre deux : 60 i/s deviennent 120</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location line="+1"/>
         <source>Sharper text, more bitrate. Few GPUs decode it (not AMD ones).</source>
         <translation>Texte plus net, plus de débit. Peu de GPU le décodent (pas ceux d’AMD).</translation>
     </message>
@@ -1917,37 +1922,56 @@
         <translation type="vanished">Dessine une image entre deux : 60 i/s affichées à 120. Coupe la synchro verticale et le frame pacing.</translation>
     </message>
     <message>
-        <location line="-316"/>
         <source>Handled by the frame doubler</source>
-        <translation>Géré par le doubleur d’images</translation>
+        <translation type="vanished">Géré par le doubleur d’images</translation>
     </message>
     <message>
-        <location line="+266"/>
         <source>Off with the frame doubler: turn V-Sync off instead</source>
-        <translation>Coupé avec le doubleur : désactivez plutôt la synchro verticale</translation>
+        <translation type="vanished">Coupé avec le doubleur : désactivez plutôt la synchro verticale</translation>
     </message>
     <message>
-        <location line="+63"/>
         <source>Draws a frame between two: 60 FPS are shown at 120. Keep V-Sync on, or off on a VRR display.</source>
-        <translation>Dessine une image entre deux : 60 i/s affichées à 120. Synchro verticale activée, ou désactivée sur un écran VRR.</translation>
+        <translation type="vanished">Dessine une image entre deux : 60 i/s affichées à 120. Synchro verticale activée, ou désactivée sur un écran VRR.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>AMD FRC engine</source>
-        <translation>Moteur AMD FRC</translation>
+        <translation type="vanished">Moteur AMD FRC</translation>
+    </message>
+    <message>
+        <source>On AMD graphics, else the KanePlay engine</source>
+        <translation type="vanished">Sur carte AMD, sinon le moteur KanePlay</translation>
+    </message>
+    <message>
+        <source>Needs the frame doubler · A turns it on</source>
+        <translation type="vanished">Nécessite le doubleur d’images · A l’active</translation>
+    </message>
+    <message>
+        <location line="-403"/>
+        <source>Frame generation</source>
+        <translation>Génération d’images</translation>
+    </message>
+    <message>
+        <location line="+416"/>
+        <source>AMD Fluid Motion Frames</source>
+        <translation>AMD Fluid Motion Frames</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>On AMD graphics, else the KanePlay engine</source>
-        <translation>Sur carte AMD, sinon le moteur KanePlay</translation>
+        <source>Opens AMD Software: turn AFMF on for KanePlay</source>
+        <translation>Ouvre AMD Software : active AFMF pour KanePlay</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Needs the frame doubler · A turns it on</source>
-        <translation>Nécessite le doubleur d’images · A l’active</translation>
+        <location line="+6"/>
+        <source>Lossless Scaling</source>
+        <translation>Lossless Scaling</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+1"/>
+        <source>Opens Lossless Scaling, then Ctrl+Alt+S on KanePlay</source>
+        <translation>Ouvre Lossless Scaling, puis Ctrl+Alt+S sur KanePlay</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Video bitrate</source>
         <translation>Débit vidéo</translation>
     </message>
@@ -1959,12 +1983,12 @@
     <message>
         <location line="+3"/>
         <location line="+26"/>
-        <location line="+392"/>
+        <location line="+391"/>
         <source>%1 Mb/s</source>
         <translation>%1 Mb/s</translation>
     </message>
     <message>
-        <location line="-407"/>
+        <location line="-406"/>
         <source>Separate Wi-Fi bitrate</source>
         <translation>Débit Wi-Fi séparé</translation>
     </message>
@@ -2309,7 +2333,7 @@
         <translation>i/s auto</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>auto bitrate</source>
         <translation>débit auto</translation>
     </message>
@@ -2325,11 +2349,15 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>Auto · auto FPS · ×2</source>
-        <translation>Auto · i/s auto · ×2</translation>
+        <source>Auto · auto FPS</source>
+        <translation>Auto · FPS auto</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <source>Auto · auto FPS · ×2</source>
+        <translation type="vanished">Auto · i/s auto · ×2</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Quality</source>
         <translation>Qualité</translation>
     </message>
@@ -2339,7 +2367,7 @@
         <translation>1440p · 60 i/s · débit élevé</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+12"/>
         <source>Battery</source>
         <translation>Batterie</translation>
     </message>
@@ -2349,7 +2377,7 @@
         <translation>720p · 60 i/s · léger</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+11"/>
         <source>Weak network</source>
         <translation>Réseau faible</translation>
     </message>
@@ -2414,22 +2442,19 @@
         <translation>Images par seconde</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Auto ×2</source>
-        <translation>Auto ×2</translation>
+        <translation type="vanished">Auto ×2</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Frame doubler on</source>
-        <translation>Doubleur activé</translation>
+        <translation type="vanished">Doubleur activé</translation>
     </message>
     <message>
-        <location line="-1"/>
         <source>Frame doubler off</source>
-        <translation>Doubleur désactivé</translation>
+        <translation type="vanished">Doubleur désactivé</translation>
     </message>
     <message>
-        <location line="-246"/>
+        <location line="-242"/>
         <source>Custom settings</source>
         <translation>Réglages personnalisés</translation>
     </message>
@@ -2449,12 +2474,11 @@
         <translation>Changer de profil</translation>
     </message>
     <message>
-        <location line="+222"/>
         <source>Doubler inactive: display too slow</source>
-        <translation>Doubleur inactif : écran trop lent</translation>
+        <translation type="vanished">Doubleur inactif : écran trop lent</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+221"/>
         <source>Bitrate</source>
         <translation>Débit</translation>
     </message>
@@ -2469,12 +2493,18 @@
         <translation>Suit la résolution</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-5"/>
+        <location line="+5"/>
         <source>Set by hand</source>
         <translation>Réglé à la main</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-5"/>
+        <source>Follows the display</source>
+        <translation>Suit l’écran</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Codec</source>
         <translation>Codec</translation>
     </message>
@@ -2516,21 +2546,19 @@
         <translation>Non pris en charge ici</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Doubler: one refresh per frame</source>
-        <translation>Doubleur : une image par rafraîchissement</translation>
+        <translation type="vanished">Doubleur : une image par rafraîchissement</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Doubler: timed frames</source>
-        <translation>Doubleur : images minutées</translation>
+        <translation type="vanished">Doubleur : images minutées</translation>
     </message>
     <message>
         <source>Off with the frame doubler</source>
         <translation type="vanished">Coupée par le doubleur d’images</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Lowest latency</source>
         <translation>Latence minimale</translation>
     </message>
@@ -2623,7 +2651,7 @@
         <translation type="vanished">Entrez une fréquence d&apos;images personnalisée :</translation>
     </message>
     <message>
-        <location line="-40"/>
+        <location line="-34"/>
         <source>%1 FPS</source>
         <translation>%1 i/s</translation>
     </message>
@@ -2688,7 +2716,7 @@
         <translation type="vanished">Fenêtré</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+20"/>
         <source>V-Sync</source>
         <translation>Synchro verticale</translation>
     </message>
@@ -3057,7 +3085,7 @@
         <translation type="vanished">Image et réseau</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Audio</source>
         <translation>Son</translation>
     </message>
@@ -3320,7 +3348,7 @@
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../gui/UpdateDialog.qml" line="+94"/>
+        <location filename="../gui/UpdateDialog.qml" line="+102"/>
         <source>Update available</source>
         <translation>Mise à jour disponible</translation>
     </message>
@@ -3330,7 +3358,7 @@
         <translation>KanePlay %1</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+72"/>
         <source>Downloading…</source>
         <translation>Téléchargement…</translation>
     </message>
@@ -3360,7 +3388,7 @@
         <translation>Installer</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>Cancel</source>
         <translation>Annuler</translation>
     </message>

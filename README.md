@@ -16,14 +16,11 @@ report KanePlay issues to them.
   latency of the session, animations and interface sounds.
 - **Streaming profiles**: Performance, Quality, Battery and Weak network, plus your
   own profiles with a name and a color.
-- **Frame doubler ×2**: draws a frame between two decoded frames, so 60 FPS are shown
-  at 120 Hz. It uses AMD's FRC through the AMF runtime on AMD graphics and a
-  built-in D3D11 engine elsewhere. *Experimental: some flickering remains.*
-- **In-game menu** (Start + Select): stats, frame doubler, gamepad mouse,
-  diagnostic capture and disconnect, without leaving the game.
-- The in-game menu can also **duplicate decoded frames for a framegen test**:
-  it keeps the double presentation cadence but substitutes the real frame for
-  the generated one. Switch it off to return to normal frame generation.
+- **Frame generation** is left to the tools that do it well: the settings open
+  AMD Software, to turn AMD Fluid Motion Frames on for KanePlay (AMD graphics),
+  or Lossless Scaling.
+- **In-game menu** (Start + Select): stats, gamepad mouse, diagnostic capture
+  and disconnect, without leaving the game.
 - **Automatic reconnection** when the network drops, a **battery saver**, and a
   bitrate that learns from each PC.
 - **In-app updates** from the GitHub releases of this repository.

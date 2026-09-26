@@ -412,14 +412,8 @@ FocusScope {
                         },
                         {
                             key: "fps", icon: "layers", label: qsTr("Frame rate"),
-                            value: StreamingPreferences.autoFps ? (StreamingPreferences.frameInterpolation ? qsTr("Auto ×2") : qsTr("Auto")) :
-                                   StreamingPreferences.frameInterpolation ? StreamingPreferences.fps + " → " + StreamingPreferences.fps * 2 :
-                                   qsTr("%1 FPS").arg(StreamingPreferences.fps),
-                            sub: !StreamingPreferences.frameInterpolation ? qsTr("Frame doubler off") :
-                                 settingsCatalog.doublerFits() ? qsTr("Frame doubler on") :
-                                 qsTr("Doubler inactive: display too slow"),
-                            subColor: !StreamingPreferences.frameInterpolation ? Theme.textSecondary :
-                                      settingsCatalog.doublerFits() ? Theme.accent2 : Theme.danger
+                            value: StreamingPreferences.autoFps ? qsTr("Auto") : qsTr("%1 FPS").arg(StreamingPreferences.fps),
+                            sub: StreamingPreferences.autoFps ? qsTr("Follows the display") : qsTr("Set by hand")
                         },
                         {
                             key: "bitrate", icon: "gauge", label: qsTr("Bitrate"),
@@ -440,9 +434,7 @@ FocusScope {
                         {
                             key: "vsync", icon: "check", label: qsTr("V-Sync"),
                             value: StreamingPreferences.enableVsync ? qsTr("On") : qsTr("Off"),
-                            sub: StreamingPreferences.frameInterpolation ?
-                                     (StreamingPreferences.enableVsync ? qsTr("Doubler: one refresh per frame") : qsTr("Doubler: timed frames")) :
-                                 !StreamingPreferences.enableVsync ? qsTr("Lowest latency") :
+                            sub: !StreamingPreferences.enableVsync ? qsTr("Lowest latency") :
                                  StreamingPreferences.enableVrr ? qsTr("With VRR") :
                                  StreamingPreferences.framePacing ? qsTr("With frame pacing") : qsTr("No tearing")
                         },

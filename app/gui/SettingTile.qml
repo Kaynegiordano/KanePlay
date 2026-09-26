@@ -41,7 +41,10 @@ AbstractButton {
             }
         }
 
-        if (setting.type === "bool") {
+        if (setting.type === "action") {
+            UiSound.play(setting.run() ? "select" : "error")
+        }
+        else if (setting.type === "bool") {
             setting.set(!setting.get())
             UiSound.play(setting.get() ? "on" : "off")
         }
@@ -160,6 +163,28 @@ AbstractButton {
             }
         }
 
+        // Opens another app
+        Row {
+            visible: tile.setting.type === "action"
+            spacing: 6
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("Open")
+                font.family: Theme.textFont
+                font.pixelSize: 14
+                font.weight: Font.Bold
+                color: Theme.accent
+            }
+
+            KpIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "right"
+                size: 16
+                color: Theme.accent
+            }
+        }
+
         // Values chosen in the side sheet
         Row {
             visible: tile.setting.type === "slider" || (tile.setting.type === "choice" && !tile.cycles)
@@ -167,7 +192,7 @@ AbstractButton {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: tile.setting.type !== "bool" ? catalog.valueText(tile.setting) : ""
+                text: tile.setting.type === "slider" || tile.setting.type === "choice" ? catalog.valueText(tile.setting) : ""
                 font.family: Theme.textFont
                 font.pixelSize: 14
                 font.weight: Font.Bold

@@ -218,8 +218,6 @@ FocusScope {
                 label: qsTr("Frame rate")
                 value: summary.avgFps !== undefined ? Math.round(summary.avgFps) : "—"
                 unit: qsTr("FPS avg.")
-                note: StreamingPreferences.frameInterpolation ? qsTr("Frame doubler on") : ""
-                noteColor: Theme.accent2
             }
 
             SummaryStat {

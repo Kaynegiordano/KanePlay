@@ -3,6 +3,11 @@
 
 #include <QGuiApplication>
 #include <QLibraryInfo>
+#include <QDesktopServices>
+#include <QFileInfo>
+#include <QProcess>
+#include <QSettings>
+#include <QUrl>
 
 #include <climits>
 
@@ -12,7 +17,33 @@
 #ifdef Q_OS_WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <dxgi.h>
+#include <wrl/client.h>
 #endif
+
+// Lossless Scaling's Steam app ID
+#define LOSSLESS_SCALING_APP_ID "993090"
+
+static bool detectAmdGpu()
+{
+#ifdef Q_OS_WIN32
+    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
+        return false;
+    }
+
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
+        DXGI_ADAPTER_DESC1 desc;
+        if (SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
+                desc.VendorId == 0x1002) {
+            return true;
+        }
+        adapter.Reset();
+    }
+#endif
+    return false;
+}
 
 class SystemPropertyQueryThread : public QThread
 {
@@ -112,6 +143,8 @@ SystemProperties::SystemProperties()
     // Off until KanePlay has a Discord application, see RichPresenceManager
     hasDiscordIntegration = false;
 
+    hasAmdGpu = detectAmdGpu();
+
     // These will be queried asynchronously to avoid blocking the UI
     hasHardwareAcceleration = true;
     rendererAlwaysFullScreen = false;
@@ -122,6 +155,50 @@ SystemProperties::SystemProperties()
 SystemProperties::~SystemProperties()
 {
     waitForAsyncLoad();
+}
+
+bool SystemProperties::launchAmdSoftware()
+{
+#ifdef Q_OS_WIN32
+    // AMD Software: Adrenalin Edition, where Fluid Motion Frames is turned on
+    QStringList candidates;
+    QSettings amd("HKEY_LOCAL_MACHINE\\SOFTWARE\\AMD\\CN", QSettings::NativeFormat);
+    QString installDir = amd.value("InstallDir").toString();
+    if (!installDir.isEmpty()) {
+        candidates << installDir + "/RadeonSoftware.exe";
+    }
+    candidates << qEnvironmentVariable("ProgramFiles") + "/AMD/CNext/CNext/RadeonSoftware.exe";
+
+    for (const QString& candidate : candidates) {
+        if (QFileInfo::exists(candidate) &&
+                QProcess::startDetached(candidate, QStringList(), QFileInfo(candidate).absolutePath())) {
+            return true;
+        }
+    }
+#endif
+    return false;
+}
+
+bool SystemProperties::launchLosslessScaling()
+{
+#ifdef Q_OS_WIN32
+    // Installed by Steam: started directly, so Steam doesn't need to be running
+    QSettings steamApp("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App " LOSSLESS_SCALING_APP_ID,
+                       QSettings::Registry64Format);
+    QString installDir = steamApp.value("InstallLocation").toString();
+    QString exe = installDir + "/LosslessScaling.exe";
+    if (!installDir.isEmpty() && QFileInfo::exists(exe) &&
+            QProcess::startDetached(exe, QStringList(), installDir)) {
+        return true;
+    }
+
+    // Otherwise Steam starts it, or shows its store page if it isn't owned
+    QSettings steam("HKEY_CURRENT_USER\\Software\\Valve\\Steam", QSettings::NativeFormat);
+    if (!steam.value("SteamExe").toString().isEmpty()) {
+        return QDesktopServices::openUrl(QUrl("steam://rungameid/" LOSSLESS_SCALING_APP_ID));
+    }
+#endif
+    return QDesktopServices::openUrl(QUrl("https://store.steampowered.com/app/" LOSSLESS_SCALING_APP_ID "/"));
 }
 
 void SystemProperties::updateDecoderProperties(bool hasHardwareAcceleration, bool rendererAlwaysFullScreen, QSize maximumResolution, bool supportsHdr)

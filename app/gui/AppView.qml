@@ -95,9 +95,6 @@ FocusScope {
         var parts = []
         parts.push(StreamingPreferences.autoResolution ? qsTr("Auto") : StreamingPreferences.height + "p")
         parts.push(StreamingPreferences.autoFps ? qsTr("Automatic FPS") : qsTr("%1 FPS").arg(StreamingPreferences.fps))
-        if (StreamingPreferences.frameInterpolation) {
-            parts.push("×2")
-        }
         return parts.join(" · ")
     }
 

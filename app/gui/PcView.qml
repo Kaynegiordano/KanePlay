@@ -691,12 +691,6 @@ FocusScope {
                     Chip {
                         text: StreamingPreferences.autoFps ? qsTr("Automatic FPS") : qsTr("%1 FPS").arg(StreamingPreferences.fps)
                     }
-
-                    Chip {
-                        visible: StreamingPreferences.frameInterpolation
-                        text: qsTr("Frame doubler ×2")
-                        textColor: Theme.accent2
-                    }
                 }
 
                 // What to do before playing on this PC

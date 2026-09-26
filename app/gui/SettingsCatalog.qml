@@ -29,7 +29,7 @@ QtObject {
 
     readonly property var categories: [
         { key: "all", label: qsTr("All") },
-        { key: "framegen", label: qsTr("Frame doubler") },
+        { key: "framegen", label: qsTr("Frame generation") },
         { key: "image", label: qsTr("Picture") },
         { key: "network", label: qsTr("Network") },
         { key: "audio", label: qsTr("Audio") },
@@ -130,33 +130,17 @@ QtObject {
         return setting.locked !== undefined ? setting.locked() : ""
     }
 
-    // Frame pacing and VRR need V-Sync, and the frame doubler paces its frames itself
+    // Frame pacing and VRR need V-Sync
     function pacingAllowed() {
-        return StreamingPreferences.enableVsync && !StreamingPreferences.frameInterpolation
+        return StreamingPreferences.enableVsync
     }
 
     function pacingLockReason() {
-        return StreamingPreferences.frameInterpolation ? qsTr("Handled by the frame doubler")
-                                                       : qsTr("Needs V-Sync · A turns it on")
+        return qsTr("Needs V-Sync · A turns it on")
     }
 
-    // Nothing to turn on while the frame doubler handles it
     function unlockPacing() {
-        if (!StreamingPreferences.frameInterpolation) {
-            StreamingPreferences.enableVsync = true
-        }
-    }
-
-    // Whether this display can show twice the frame rate of the stream, which
-    // the frame doubler needs (see D3D11VARenderer::initializeFrameInterpolation)
-    function doublerFits() {
-        var refreshRate = SystemProperties.getRefreshRate(displayIndex())
-        if (refreshRate === 0) {
-            return true
-        }
-        // Automatic picks half the refresh rate from 90 Hz up
-        var fps = StreamingPreferences.autoFps ? (refreshRate >= 90 ? refreshRate / 2 : refreshRate) : StreamingPreferences.fps
-        return refreshRate * 10 >= fps * 18
+        StreamingPreferences.enableVsync = true
     }
 
     function defaultBitrate() {
@@ -329,8 +313,7 @@ QtObject {
                         setFps(parseInt(value), false)
                     }
                 },
-                def: function() { return "60" },
-                companions: ["frameInterpolation", "amdFrameInterpolation"]
+                def: function() { return "60" }
             },
             {
                 key: "codec", category: "image", icon: "image", type: "choice",
@@ -401,10 +384,7 @@ QtObject {
                 label: qsTr("VRR"),
                 desc: qsTr("Variable refresh rate, needs V-Sync"),
                 enabled: function() { return pacingAllowed() },
-                locked: function() {
-                    return StreamingPreferences.frameInterpolation ? qsTr("Off with the frame doubler: turn V-Sync off instead")
-                                                                   : pacingLockReason()
-                },
+                locked: pacingLockReason,
                 unlock: unlockPacing,
                 get: function() { return StreamingPreferences.enableVrr },
                 set: function(value) { StreamingPreferences.enableVrr = value },
@@ -461,27 +441,21 @@ QtObject {
                 def: function() { return false }
             },
 
-            // Frame doubler
+            // Frame generation, left to other apps that do it well: they open
+            // from here, and are turned on in them
             {
-                key: "frameInterpolation", category: "framegen", icon: "layers", type: "bool",
-                label: qsTr("Frame doubler ×2"),
-                desc: qsTr("Draws a frame between two: 60 FPS are shown at 120. Keep V-Sync on, or off on a VRR display."),
-                available: function() { return Qt.platform.os === "windows" },
-                get: function() { return StreamingPreferences.frameInterpolation },
-                set: function(value) { StreamingPreferences.frameInterpolation = value },
-                def: function() { return false }
+                key: "amdFluidMotionFrames", category: "framegen", icon: "layers", type: "action",
+                label: qsTr("AMD Fluid Motion Frames"),
+                desc: qsTr("Opens AMD Software: turn AFMF on for KanePlay"),
+                available: function() { return Qt.platform.os === "windows" && SystemProperties.hasAmdGpu },
+                run: function() { return SystemProperties.launchAmdSoftware() }
             },
             {
-                key: "amdFrameInterpolation", category: "framegen", icon: "layers", type: "bool",
-                label: qsTr("AMD FRC engine"),
-                desc: qsTr("On AMD graphics, else the KanePlay engine"),
+                key: "losslessScaling", category: "framegen", icon: "layers", type: "action",
+                label: qsTr("Lossless Scaling"),
+                desc: qsTr("Opens Lossless Scaling, then Ctrl+Alt+S on KanePlay"),
                 available: function() { return Qt.platform.os === "windows" },
-                enabled: function() { return StreamingPreferences.frameInterpolation },
-                locked: function() { return qsTr("Needs the frame doubler · A turns it on") },
-                unlock: function() { StreamingPreferences.frameInterpolation = true },
-                get: function() { return StreamingPreferences.amdFrameInterpolation },
-                set: function(value) { StreamingPreferences.amdFrameInterpolation = value },
-                def: function() { return true }
+                run: function() { return SystemProperties.launchLosslessScaling() }
             },
 
             // Network
@@ -873,7 +847,7 @@ QtObject {
 
     // Values a custom profile saves and restores
     readonly property var profileKeys: [
-        "autoResolution", "width", "height", "autoFps", "fps", "frameInterpolation", "amdFrameInterpolation",
+        "autoResolution", "width", "height", "autoFps", "fps",
         "autoAdjustBitrate", "bitrateKbps", "videoCodecConfig", "enableHdr", "enableVsync", "framePacing",
         "enableVrr", "enableYUV444", "audioConfig"
     ]
@@ -907,8 +881,7 @@ QtObject {
     function describe(values) {
         var parts = []
         parts.push(values.autoResolution ? qsTr("Auto") : values.height + "p")
-        var fps = values.autoFps ? qsTr("auto FPS") : qsTr("%1 FPS").arg(values.fps)
-        parts.push(values.frameInterpolation ? fps + " ×2" : fps)
+        parts.push(values.autoFps ? qsTr("auto FPS") : qsTr("%1 FPS").arg(values.fps))
         parts.push(values.autoAdjustBitrate ? qsTr("auto bitrate") : qsTr("%1 Mb/s").arg(Math.round(values.bitrateKbps / 100) / 10))
         return parts.join(" · ")
     }
@@ -1000,51 +973,46 @@ QtObject {
     // Built-in streaming profiles
     readonly property var profiles: [
         { key: "performance", icon: "layers", label: qsTr("Performance"), color: "#FF6A3D",
-          summary: qsTr("Auto · auto FPS · ×2"),
+          summary: qsTr("Auto · auto FPS"),
           apply: function() {
               setResolution(0, 0, true)
               setFps(0, true)
-              StreamingPreferences.frameInterpolation = Qt.platform.os === "windows"
               StreamingPreferences.autoAdjustBitrate = true
               StreamingPreferences.bitrateKbps = defaultBitrate()
           },
           matches: function() {
-              return StreamingPreferences.autoResolution && StreamingPreferences.autoFps &&
-                     StreamingPreferences.frameInterpolation === (Qt.platform.os === "windows")
+              return StreamingPreferences.autoResolution && StreamingPreferences.autoFps
           } },
         { key: "quality", icon: "image", label: qsTr("Quality"), color: "#9B8CFF",
           summary: qsTr("1440p · 60 FPS · high bitrate"),
           apply: function() {
               setResolution(2560, 1440, false)
               setFps(60, false)
-              StreamingPreferences.frameInterpolation = false
               StreamingPreferences.autoAdjustBitrate = false
               StreamingPreferences.bitrateKbps = Math.min(Math.round(defaultBitrate() * 1.5 / 500) * 500,
                                                           StreamingPreferences.getMaxBitrate(StreamingPreferences.unlockBitrate))
           },
           matches: function() {
               return !StreamingPreferences.autoResolution && StreamingPreferences.height === 1440 &&
-                     !StreamingPreferences.autoFps && StreamingPreferences.fps === 60 && !StreamingPreferences.frameInterpolation
+                     !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
           } },
         { key: "battery", icon: "power", label: qsTr("Battery"), color: "#5FD39A",
           summary: qsTr("720p · 60 FPS · light"),
           apply: function() {
               setResolution(1280, 720, false)
               setFps(60, false)
-              StreamingPreferences.frameInterpolation = false
               StreamingPreferences.autoAdjustBitrate = true
               StreamingPreferences.bitrateKbps = defaultBitrate()
           },
           matches: function() {
               return !StreamingPreferences.autoResolution && StreamingPreferences.height === 720 &&
-                     !StreamingPreferences.autoFps && StreamingPreferences.fps === 60 && !StreamingPreferences.frameInterpolation
+                     !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
           } },
         { key: "weaknetwork", icon: "wifi", label: qsTr("Weak network"), color: "#5CC8FF",
           summary: qsTr("720p · 30 FPS · low bitrate"),
           apply: function() {
               setResolution(1280, 720, false)
               setFps(30, false)
-              StreamingPreferences.frameInterpolation = false
               StreamingPreferences.autoAdjustBitrate = false
               StreamingPreferences.bitrateKbps = Math.min(defaultBitrate(), 6000)
           },
