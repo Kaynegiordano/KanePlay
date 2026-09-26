@@ -13,21 +13,24 @@
 
 // Shows the frames of the frame doubler at an even pace, from a thread of its own.
 //
-// For each decoded frame, the render thread fills a slot with the interpolated
-// frame and the decoded frame, then submits it. The present thread shows the
-// interpolated frame, then the decoded one, each for half a stream frame, the way
-// AMD's FSR 3 frame generation paces its frames. Keeping this apart from the
-// render thread means the time spent interpolating (AMF can take several
-// milliseconds) no longer shortens how long a frame stays on screen, which made
-// frames flicker.
+// For each decoded frame, the render thread asks planFrames() which frames to
+// show until the next one, fills a slot with them (interpolated frames and the
+// decoded frame), then submits it. The present thread shows them in order.
+// Keeping this apart from the render thread means the time spent interpolating
+// (AMF can take several milliseconds) no longer shortens how long a frame stays
+// on screen, which made frames flicker.
 //
 // Two ways to pace:
-//  - Queued (V-sync on, or no tearing support): both frames go through the
-//    swapchain queue with a sync interval of 1, so each one is shown for one
-//    refresh. Ideal when the display runs at twice the stream rate.
-//  - Timed (V-sync off, with tearing support): each frame is presented half a
-//    stream frame after the previous one, measured on the stream's own clock.
-//    Ideal on VRR displays, which then show every frame for the same time.
+//  - Queued (V-sync on, or no tearing support): every frame goes through the
+//    swapchain queue with a sync interval of 1, so each one is shown for exactly
+//    one refresh. There is one frame per refresh, interpolated at the moment of
+//    the stream that refresh stands for: 2 per decoded frame for 60 FPS on
+//    120 Hz, but also 2 or 3 for a game running at 49 FPS, or 4 for 30 FPS.
+//    Motion then stays even whatever the game's frame rate.
+//  - Timed (V-sync off, with tearing support): a frame halfway, then the decoded
+//    frame, each presented half a stream frame after the previous one, measured
+//    on the stream's own clock. Ideal on VRR displays, which then show every
+//    frame for the same time.
 class D3D11FiPresenter
 {
 public:
@@ -46,18 +49,26 @@ public:
         // The last present that reached the screen, and on which refresh
         // (IDXGISwapChain::GetFrameStatistics()), for the statistics
         std::function<bool(UINT& presentCount, UINT& refreshCount)> frameStatistics;
+
         // Live diagnostic toggle: keep the presentation cadence but show decoded frames twice.
         std::function<bool()> duplicateDecodedForTest;
     };
 
-    // A frame to show: the interpolated frame (drawn to interpolatedTarget)
-    // and the decoded frame (copied to decoded)
+    // Interpolated frames per decoded frame, at most: with the decoded frame,
+    // 5 frames per decoded frame, enough for 30 FPS on 144 Hz
+    static constexpr int k_MaxInterpolated = 4;
+
+    struct Texture {
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> view;
+    };
+
+    // The frames to show for a decoded frame: the interpolated frames (drawn to
+    // interpolatedTarget()) and the decoded frame (copied to decoded.texture)
     struct Slot {
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> interpolated;
-        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> interpolatedTarget;
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> interpolatedView;
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> decoded;
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> decodedView;
+        std::array<Texture, k_MaxInterpolated> interpolated;
+        Texture decoded;
         int width = 0;
         int height = 0;
     };
@@ -66,16 +77,27 @@ public:
     ~D3D11FiPresenter();
 
     bool initialize(ID3D11Device5* device, ID3D11DeviceContext4* context, DXGI_FORMAT format,
-                    int streamFps, bool timed, bool allowTearing, const Callbacks& callbacks);
+                    int streamFps, int refreshRate, bool timed, bool allowTearing, const Callbacks& callbacks);
+
+    // Render thread, for each decoded frame: the phases (from 0, the previous
+    // frame, to 1, this one) of the frames to interpolate before it, and whether
+    // the decoded frame is shown after them. pts is its 90 kHz timestamp;
+    // consecutive is false when frames are missing before it, then nothing is
+    // interpolated. Returns how many phases were written.
+    int planFrames(int64_t pts, bool consecutive, float* phases, int maxPhases, bool& showDecoded);
 
     // Render thread, with the context locked: a free slot for a frame of this size,
     // or nullptr on failure. It stays reserved until submit() or cancel().
     Slot* acquire(int width, int height);
     void cancel(Slot* slot);
 
-    // Render thread, with the context locked: queues the slot to be shown.
-    // pts is the 90 kHz timestamp of the decoded frame, to pace on the stream clock.
-    void submit(Slot* slot, bool hasInterpolated, int64_t pts);
+    // Where to draw the interpolated frame of this index, or nullptr on failure
+    ID3D11RenderTargetView* interpolatedTarget(Slot* slot, int index);
+
+    // Render thread, with the context locked: queues the slot to be shown, its
+    // first interpolatedCount interpolated frames then, if showDecoded, the
+    // decoded frame. pts is the 90 kHz timestamp of the decoded frame.
+    void submit(Slot* slot, int interpolatedCount, bool showDecoded, int64_t pts);
 
     // Waits until every submitted frame is on screen, before presenting
     // from somewhere else. The context must not be locked.
@@ -91,7 +113,8 @@ private:
 
     struct Job {
         int slot;
-        bool hasInterpolated;
+        int interpolatedCount;
+        bool showDecoded;
         UINT64 fenceValue;
         uint64_t submitUs;
     };
@@ -102,10 +125,11 @@ private:
     // Waiting, plus the one shown and the one being filled
     static constexpr int k_Slots = (int)k_MaxQueued + 2;
 
-    bool createSlot(Slot& slot, int width, int height);
+    bool createTexture(Texture& texture, int width, int height, bool renderTarget);
     void presentThread();
     void showJob(Job& job, bool backlog);
-    bool presentSlot(Slot& slot, bool interpolated);
+    // index is that of an interpolated frame, or -1 for the decoded frame
+    bool presentSlot(Slot& slot, int index);
     void waitUntil(uint64_t targetUs);
     void checkBlockingPresent(uint64_t durationUs);
     void recordInterval(uint64_t presentUs, bool interpolated);
@@ -147,6 +171,23 @@ private:
     int64_t m_LastPts = 0;
     bool m_HasLastPts = false;
 
+    // Render thread: the display refresh period, and when the next refresh
+    // falls after the last decoded frame, on the stream clock (see planFrames())
+    double m_RefreshUs = 0;
+    // The time the display really takes per frame, measured by the present
+    // thread (see showJob()), in microseconds
+    std::atomic<double> m_MeasuredRefreshUs { 0 };
+    double m_NextRefreshUs = 0;
+    int64_t m_PlanLastPts = 0;
+    bool m_PlanHasLastPts = false;
+    // Refreshes with nothing new to show, beyond k_MaxInterpolated
+    uint64_t m_UnplannedRefreshes = 0;
+    // Refreshes skipped to bring the latency back down
+    uint64_t m_CatchUpRefreshes = 0;
+
+    // Frames submitted and not shown yet
+    std::atomic<int> m_PendingFrames { 0 };
+
     // Present thread only
     uint64_t m_GridUs = 0;
     uint64_t m_LastPresentUs = 0;
@@ -167,5 +208,6 @@ private:
     uint64_t m_LongIntervals = 0;
     uint64_t m_Intervals = 0;
     uint64_t m_TotalLatencyUs = 0;
+    uint64_t m_LatencySamples = 0;
     uint64_t m_MaxLatencyUs = 0;
 };

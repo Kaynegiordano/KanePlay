@@ -1,5 +1,6 @@
-// Frame interpolation: draws the frame halfway between the previous and the
-// current frame.
+// Frame interpolation: draws the frame at a given phase between the previous
+// (0) and the current frame (1), for example halfway (0.5) to double the rate,
+// or wherever the display's next refresh falls.
 //
 // Each pixel tries the smoothly interpolated motion, the motion of the four
 // surrounding blocks and zero, and keeps the one where both frames agree best
@@ -21,7 +22,7 @@ cbuffer INTERP_CONST_BUF : register(b1)
     float2 invVideoSize;
     float2 gridSize;
     float blockSize;
-    float padding;
+    float phase;
 };
 
 struct ShaderInput
@@ -118,9 +119,9 @@ float4 main(ShaderInput input) : SV_TARGET
     float staticChange = max(abs(luma(previous.rgb) - luma(current.rgb)), neighbourhoodMismatch(pos, pos));
     float staticWeight = 1.0 - smoothstep(STATIC_START, STATIC_END, staticChange);
 
-    // Moving pixels take the vector where both frames agree best around them.
-    // The smooth vector is preferred unless a block vector is clearly better
-    // (object edges).
+    // Moving pixels take the vector where both frames agree best around them,
+    // tested halfway, where the vectors were estimated. The smooth vector is
+    // preferred unless a block vector is clearly better (object edges).
     float2 candidates[6] = { smooth, v00, v10, v01, v11, float2(0, 0) };
     float biases[6] = { 0.0, 0.03, 0.03, 0.03, 0.03, 0.02 };
     float bestError = 1e30;
@@ -139,22 +140,29 @@ float4 main(ShaderInput input) : SV_TARGET
         }
     }
 
-    // Meet halfway along the chosen motion
-    float4 a = sampleSharp(prevFrame, pos - bestVector);
-    float4 b = sampleSharp(currFrame, pos + bestVector);
-    float4 blend = (a + b) * 0.5;
+    // Vectors are half the motion between the two frames, so at the given
+    // phase a pixel comes from 2 * phase vectors back in the previous frame
+    // and 2 * (1 - phase) vectors ahead in the current one. The closer frame
+    // weighs more.
+    float stepBack = 2.0 * phase;
+    float stepAhead = 2.0 * (1.0 - phase);
+    float2 posA = pos - bestVector * stepBack;
+    float2 posB = pos + bestVector * stepAhead;
+    float4 a = sampleSharp(prevFrame, posA);
+    float4 b = sampleSharp(currFrame, posB);
+    float4 blend = lerp(a, b, phase);
 
     // Where the two frames still disagree along the best motion, something
     // appeared or disappeared (or the motion is wrong, or the scene changed).
     // Blending there shows a half transparent double image between two sharp
-    // frames, which flickers. The next frame is shown there instead: the change
-    // just appears half a frame early.
+    // frames, which flickers. The closer frame is shown there instead: the
+    // change just appears a little early or late.
     // Mostly measured around the pixel: a single pixel on a sharp edge disagrees
     // a lot as soon as the motion is off by a fraction of a pixel.
-    float disagreement = neighbourhoodMismatch(pos - bestVector, pos + bestVector) +
+    float disagreement = neighbourhoodMismatch(posA, posB) +
                          abs(luma(a.rgb) - luma(b.rgb)) * 0.5;
     float fallback = smoothstep(FALLBACK_START, FALLBACK_END, disagreement);
-    blend = lerp(blend, current, fallback);
+    blend = lerp(blend, phase < 0.5 ? previous : current, fallback);
 
     float4 result = lerp(blend, current, staticWeight);
 

@@ -93,6 +93,7 @@ D3D11VARenderer::D3D11VARenderer(int decoderSelectionPass)
       m_FiProblem(),
       m_FiSkippedBacklog(0),
       m_FiLastPts(AV_NOPTS_VALUE),
+      m_FiAnalyzedPrevious(false),
       m_FiCaptureRemaining(0),
       m_HwDeviceContext(nullptr)
 {
@@ -796,7 +797,7 @@ bool D3D11VARenderer::initializeFrameInterpolation()
 
     auto presenter = std::make_unique<D3D11FiPresenter>();
     if (!presenter->initialize(m_RenderDevice.Get(), m_RenderDeviceContext.Get(), swapChainDesc.Format,
-                               m_DecoderParams.frameRate, m_AllowTearing, m_AllowTearing, callbacks)) {
+                               m_DecoderParams.frameRate, refreshRate, m_AllowTearing, m_AllowTearing, callbacks)) {
         SDL_strlcpy(m_FiProblem, "PRESENTATION", sizeof(m_FiProblem));
         return false;
     }
@@ -807,10 +808,16 @@ bool D3D11VARenderer::initializeFrameInterpolation()
     // AMD's interpolation needs the video size, so it's set up with the first frame
     m_TryAmdFrc = m_DecoderParams.allowAmdFrameInterpolation;
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "Frame interpolation: %d FPS stream shown at %d FPS on a %d Hz display (%s)",
-                m_DecoderParams.frameRate, m_DecoderParams.frameRate * 2, refreshRate,
-                m_AllowTearing ? "timed" : "V-sync queue");
+    if (m_AllowTearing) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation: %d FPS stream shown at %d FPS on a %d Hz display (timed)",
+                    m_DecoderParams.frameRate, m_DecoderParams.frameRate * 2, refreshRate);
+    }
+    else {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation: %d FPS stream shown at %d FPS, one frame per refresh (V-sync queue)",
+                    m_DecoderParams.frameRate, refreshRate);
+    }
     return true;
 }
 
@@ -933,15 +940,18 @@ void D3D11VARenderer::renderFrame(AVFrame* frame)
 
 void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
 {
-    // Frames that aren't consecutive (lost on the network, dropped by the pacer,
-    // or a game running below the stream rate) can't be interpolated: the motion
-    // between them doesn't fit in half a frame.
+    // Frames too far apart (lost on the network, dropped by the pacer, or a
+    // pause) can't be interpolated. A game running below the stream rate still
+    // is, down to 40% of it (24 FPS for a 60 FPS stream).
     bool consecutive = true;
     if (frame->pts != AV_NOPTS_VALUE && m_FiLastPts != AV_NOPTS_VALUE && m_DecoderParams.frameRate > 0) {
         // 90 kHz RTP timestamps, which wrap around
         int32_t delta = (int32_t)((uint32_t)frame->pts - (uint32_t)m_FiLastPts);
         int32_t expected = 90000 / m_DecoderParams.frameRate;
-        consecutive = delta > expected / 2 && delta < expected * 3 / 2;
+        consecutive = delta > expected / 2 && delta < expected * 5 / 2;
+    }
+    else if (frame->pts == AV_NOPTS_VALUE) {
+        consecutive = false;
     }
     m_FiLastPts = frame->pts;
 
@@ -988,6 +998,41 @@ void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
     // context is unlocked meanwhile: the present thread keeps showing frames
     ID3D11ShaderResourceView* amdFrcOutput = interpolateWithAmdFrc(frame);
 
+    // Which frames the display needs until this one: none, one halfway, or
+    // several at the moments of its next refreshes (see D3D11FiPresenter)
+    float phases[D3D11FiPresenter::k_MaxInterpolated];
+    bool showDecoded;
+    int phaseCount = m_FiPresenter->planFrames(frame->pts, consecutive, phases,
+                                               D3D11FiPresenter::k_MaxInterpolated, showDecoded);
+
+    // AMD's interpolation only makes the frame halfway
+    bool useAmdFrc = amdFrcOutput != nullptr && phaseCount == 1 && SDL_fabsf(phases[0] - 0.5f) < 0.01f;
+
+    // The built-in engine estimates motion even when no frame is interpolated,
+    // so the next frame can use it as a prediction. With AMF, it only runs when
+    // other phases are needed, starting over if it skipped the previous frame.
+    bool builtInReady = false;
+    if (!m_AmdFrc || (phaseCount > 0 && !useAmdFrc)) {
+        if (m_AmdFrc && !m_FiAnalyzedPrevious) {
+            m_FrameInterpolator->reset();
+        }
+        builtInReady = m_FrameInterpolator->analyzeFrame();
+        m_FiAnalyzedPrevious = true;
+    }
+    else {
+        m_FiAnalyzedPrevious = false;
+    }
+    if (!useAmdFrc && !builtInReady) {
+        phaseCount = 0;
+        showDecoded = true;
+    }
+
+    // Nothing for the display this time: the stream runs faster than it
+    if (phaseCount == 0 && !showDecoded) {
+        unlockContext(this);
+        return;
+    }
+
     D3D11FiPresenter::Slot* slot = m_FiPresenter->acquire(frame->width, frame->height);
     if (slot == nullptr) {
         unlockContext(this);
@@ -995,33 +1040,28 @@ void D3D11VARenderer::renderInterpolatedFrame(AVFrame* frame)
         return;
     }
 
-    bool interpolated = false;
-    if (amdFrcOutput != nullptr) {
-        interpolated = true;
-    }
-    else if (!m_AmdFrc) {
-        // The built-in engine estimates motion even when the interpolated
-        // frame ends up skipped, so the next frame can use it as a prediction
-        interpolated = m_FrameInterpolator->analyzeFrame();
-    }
-
-    if (interpolated) {
-        // Draw the interpolated frame into the slot, at the video resolution
+    // Draw the interpolated frames into the slot, at the video resolution
+    int drawn = 0;
+    for (; drawn < phaseCount; drawn++) {
+        ID3D11RenderTargetView* target = m_FiPresenter->interpolatedTarget(slot, drawn);
+        if (target == nullptr) {
+            break;
+        }
         m_RenderDeviceContext->RSSetViewports(1, &videoViewport);
-        m_RenderDeviceContext->OMSetRenderTargets(1, slot->interpolatedTarget.GetAddressOf(), nullptr);
+        m_RenderDeviceContext->OMSetRenderTargets(1, &target, nullptr);
         bindVertexBuffer(m_FiFullVertexBuffer, { -1.0f, -1.0f, 2.0f, 2.0f }, 1.0f, 1.0f);
-        if (amdFrcOutput != nullptr) {
+        if (useAmdFrc) {
             m_FrameInterpolator->drawTexture(amdFrcOutput);
         }
         else {
-            m_FrameInterpolator->drawInterpolated();
+            m_FrameInterpolator->drawInterpolated(phases[drawn]);
         }
         m_RenderDeviceContext->OMSetRenderTargets(1, &nullTarget, nullptr);
-        m_FiInterpolatedFrames++;
     }
+    m_FiInterpolatedFrames += drawn;
 
-    m_RenderDeviceContext->CopyResource(slot->decoded.Get(), m_FrameInterpolator->currentFrameTexture());
-    m_FiPresenter->submit(slot, interpolated, frame->pts);
+    m_RenderDeviceContext->CopyResource(slot->decoded.texture.Get(), m_FrameInterpolator->currentFrameTexture());
+    m_FiPresenter->submit(slot, drawn, showDecoded || drawn < phaseCount, frame->pts);
 
     unlockContext(this);
 }

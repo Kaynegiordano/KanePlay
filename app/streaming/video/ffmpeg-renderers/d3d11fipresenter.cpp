@@ -41,7 +41,7 @@ D3D11FiPresenter::~D3D11FiPresenter()
 }
 
 bool D3D11FiPresenter::initialize(ID3D11Device5* device, ID3D11DeviceContext4* context, DXGI_FORMAT format,
-                                  int streamFps, bool timed, bool allowTearing, const Callbacks& callbacks)
+                                  int streamFps, int refreshRate, bool timed, bool allowTearing, const Callbacks& callbacks)
 {
     m_Device = device;
     m_Context = context;
@@ -53,6 +53,8 @@ bool D3D11FiPresenter::initialize(ID3D11Device5* device, ID3D11DeviceContext4* c
     m_SyncInterval = timed ? 0 : 1;
     m_PresentFlags = timed && allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
     m_NominalPeriodUs = m_PeriodUs = 1000000.0 / SDL_max(streamFps, 1);
+    m_RefreshUs = 1000000.0 / SDL_max(refreshRate, 1);
+    m_MeasuredRefreshUs = m_RefreshUs;
 
     // Timing is more accurate if the present thread waits for the GPU to finish
     // a frame before presenting it. Without a fence, frames are just presented.
@@ -96,9 +98,9 @@ void D3D11FiPresenter::stop()
     logStats();
 }
 
-bool D3D11FiPresenter::createSlot(Slot& slot, int width, int height)
+bool D3D11FiPresenter::createTexture(Texture& texture, int width, int height, bool renderTarget)
 {
-    slot = Slot();
+    texture = Texture();
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = width;
@@ -110,30 +112,95 @@ bool D3D11FiPresenter::createSlot(Slot& slot, int width, int height)
     texDesc.Usage = D3D11_USAGE_DEFAULT;
     texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-    HRESULT hr = m_Device->CreateTexture2D(&texDesc, nullptr, &slot.interpolated);
-    if (SUCCEEDED(hr)) {
-        hr = m_Device->CreateRenderTargetView(slot.interpolated.Get(), nullptr, &slot.interpolatedTarget);
+    HRESULT hr = m_Device->CreateTexture2D(&texDesc, nullptr, &texture.texture);
+    if (SUCCEEDED(hr) && renderTarget) {
+        hr = m_Device->CreateRenderTargetView(texture.texture.Get(), nullptr, &texture.target);
     }
     if (SUCCEEDED(hr)) {
-        hr = m_Device->CreateShaderResourceView(slot.interpolated.Get(), nullptr, &slot.interpolatedView);
-    }
-    if (SUCCEEDED(hr)) {
-        hr = m_Device->CreateTexture2D(&texDesc, nullptr, &slot.decoded);
-    }
-    if (SUCCEEDED(hr)) {
-        hr = m_Device->CreateShaderResourceView(slot.decoded.Get(), nullptr, &slot.decodedView);
+        hr = m_Device->CreateShaderResourceView(texture.texture.Get(), nullptr, &texture.view);
     }
     if (FAILED(hr)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "Frame interpolation: unable to create presentation textures: %x",
                      hr);
-        slot = Slot();
+        texture = Texture();
         return false;
     }
-
-    slot.width = width;
-    slot.height = height;
     return true;
+}
+
+int D3D11FiPresenter::planFrames(int64_t pts, bool consecutive, float* phases, int maxPhases, bool& showDecoded)
+{
+    // Time since the previous decoded frame, on the stream's clock (90 kHz
+    // timestamps, which wrap around)
+    double deltaUs = 0;
+    if (m_PlanHasLastPts) {
+        deltaUs = (int32_t)((uint32_t)pts - (uint32_t)m_PlanLastPts) * 1000000.0 / 90000;
+    }
+    m_PlanLastPts = pts;
+    m_PlanHasLastPts = true;
+
+    showDecoded = true;
+
+    if (m_Timed) {
+        // Halfway, then the decoded frame, both timed by the present thread
+        if (!consecutive) {
+            return 0;
+        }
+        phases[0] = 0.5f;
+        return 1;
+    }
+
+    // The display's refresh rate may not be what it claims: with VRR (G-SYNC,
+    // FreeSync) and V-sync, it runs as fast as frames come, up to a cap below
+    // its maximum. Planning more frames than it shows would only pile them up.
+    double refreshUs = m_MeasuredRefreshUs;
+
+    // Nothing to interpolate from: the decoded frame gets the next refresh
+    if (!consecutive || deltaUs <= 0) {
+        m_NextRefreshUs = refreshUs;
+        return 0;
+    }
+
+    // More frames waiting than until this one, and a refresh more: the display
+    // fell behind (network jitter, a slow frame). One refresh is skipped, a
+    // small jump in time, rather than the latency staying up for good.
+    if (m_PendingFrames > deltaUs / refreshUs + 1) {
+        m_NextRefreshUs += refreshUs;
+        m_CatchUpRefreshes++;
+    }
+
+    // Each refresh shows the stream as it was one refresh after the frame the
+    // previous refresh showed. The refreshes that fall before this frame get
+    // frames interpolated at their moment. One that falls within a tenth of a
+    // refresh of this frame shows the decoded frame itself, and the count starts
+    // again from it, so a steady 60 FPS on 120 Hz alternates exact halves and
+    // decoded frames.
+    double snapUs = refreshUs * 0.1;
+    int count = 0;
+    while (m_NextRefreshUs < deltaUs - snapUs) {
+        if (count < maxPhases) {
+            phases[count++] = (float)(m_NextRefreshUs / deltaUs);
+        }
+        else {
+            // Too many for a slot: the previous frame stays on screen longer
+            m_UnplannedRefreshes++;
+        }
+        m_NextRefreshUs += refreshUs;
+    }
+
+    if (m_NextRefreshUs <= deltaUs + snapUs) {
+        showDecoded = true;
+        m_NextRefreshUs = refreshUs;
+    }
+    else {
+        // The next refresh falls well after this frame: it shows a frame
+        // interpolated towards the next decoded one
+        showDecoded = false;
+        m_NextRefreshUs -= deltaUs;
+    }
+
+    return count;
 }
 
 D3D11FiPresenter::Slot* D3D11FiPresenter::acquire(int width, int height)
@@ -145,6 +212,7 @@ D3D11FiPresenter::Slot* D3D11FiPresenter::acquire(int width, int height)
         // Too far behind: the oldest waiting frame goes, so the display catches up
         while (m_Jobs.size() >= k_MaxQueued) {
             m_SlotStates[m_Jobs.front().slot] = SlotState::Free;
+            m_PendingFrames -= m_Jobs.front().interpolatedCount + (m_Jobs.front().showDecoded ? 1 : 0);
             m_Jobs.pop_front();
             m_DroppedFrames++;
         }
@@ -163,14 +231,27 @@ D3D11FiPresenter::Slot* D3D11FiPresenter::acquire(int width, int height)
         return nullptr;
     }
 
+    // Interpolated frames are created when first needed (see interpolatedTarget())
     Slot& slot = m_Slots[index];
-    if (slot.width != width || slot.height != height || !slot.interpolated) {
-        if (!createSlot(slot, width, height)) {
+    if (slot.width != width || slot.height != height || !slot.decoded.texture) {
+        slot = Slot();
+        if (!createTexture(slot.decoded, width, height, false)) {
             cancel(&slot);
             return nullptr;
         }
+        slot.width = width;
+        slot.height = height;
     }
     return &slot;
+}
+
+ID3D11RenderTargetView* D3D11FiPresenter::interpolatedTarget(Slot* slot, int index)
+{
+    Texture& texture = slot->interpolated[index];
+    if (!texture.texture && !createTexture(texture, slot->width, slot->height, true)) {
+        return nullptr;
+    }
+    return texture.target.Get();
 }
 
 void D3D11FiPresenter::cancel(Slot* slot)
@@ -179,11 +260,14 @@ void D3D11FiPresenter::cancel(Slot* slot)
     m_SlotStates[slot - m_Slots.data()] = SlotState::Free;
 }
 
-void D3D11FiPresenter::submit(Slot* slot, bool hasInterpolated, int64_t pts)
+void D3D11FiPresenter::submit(Slot* slot, int interpolatedCount, bool showDecoded, int64_t pts)
 {
     Job job;
     job.slot = (int)(slot - m_Slots.data());
-    job.hasInterpolated = hasInterpolated;
+    job.interpolatedCount = interpolatedCount;
+    // Something has to be shown
+    job.showDecoded = showDecoded || interpolatedCount == 0;
+    m_PendingFrames += interpolatedCount + (job.showDecoded ? 1 : 0);
     job.fenceValue = 0;
     job.submitUs = LiGetMicroseconds();
 
@@ -277,15 +361,62 @@ void D3D11FiPresenter::showJob(Job& job, bool backlog)
         halfPeriodUs = m_PeriodUs / 2;
     }
 
-    // When another frame is already waiting, showing this interpolated frame
-    // would either shorten the previous frame or delay everything further
-    bool interpolated = job.hasInterpolated;
-    if (interpolated && backlog) {
-        interpolated = false;
-        m_SkippedInterpolated++;
+    // When another frame is already waiting, showing these interpolated frames
+    // would delay everything further: only the last frame of the job is shown
+    int first = 0;
+    if (backlog) {
+        first = job.showDecoded ? job.interpolatedCount : job.interpolatedCount - 1;
+        m_SkippedInterpolated += first;
+        m_PendingFrames -= first;
     }
 
-    if (m_Timed) {
+    if (!m_Timed) {
+        // One frame per refresh, through the swapchain queue: Present() returns
+        // once the display took the previous frame. Between two frames of the
+        // same job, nothing else is waited for, so the time between them is
+        // how long the display takes per frame.
+        bool shown = false;
+        uint64_t previousUs = 0;
+        auto measure = [this, &previousUs] {
+            uint64_t now = LiGetMicroseconds();
+            if (previousUs != 0) {
+                double intervalUs = (double)(now - previousUs);
+                if (intervalUs > m_RefreshUs * 0.5 && intervalUs < m_RefreshUs * 2) {
+                    double measured = m_MeasuredRefreshUs;
+                    m_MeasuredRefreshUs = measured + (intervalUs - measured) * 0.02;
+                }
+            }
+            previousUs = now;
+        };
+        for (int i = first; i < job.interpolatedCount; i++) {
+            bool presented = presentSlot(slot, i);
+            m_PendingFrames--;
+            if (!presented) {
+                m_PendingFrames -= job.interpolatedCount - 1 - i + (job.showDecoded ? 1 : 0);
+                return;
+            }
+            measure();
+            shown = true;
+        }
+        if (job.showDecoded) {
+            shown = presentSlot(slot, -1);
+            m_PendingFrames--;
+            if (shown) {
+                measure();
+            }
+        }
+        if (shown) {
+            uint64_t latencyUs = LiGetMicroseconds() - job.submitUs;
+            m_TotalLatencyUs += latencyUs;
+        m_LatencySamples++;
+            m_MaxLatencyUs = SDL_max(m_MaxLatencyUs, latencyUs);
+        }
+        return;
+    }
+
+    bool interpolated = job.interpolatedCount > 0 && first == 0;
+
+    {
         // Frames are shown on a steady grid of stream periods, like a jitter
         // buffer: a frame that arrives early waits for its place, a late one is
         // shown as soon as it's ready and the grid moves with it. Network jitter
@@ -312,30 +443,33 @@ void D3D11FiPresenter::showJob(Job& job, bool backlog)
         m_GridUs = target + (uint64_t)(periodUs - drift);
     }
 
+    // Timed jobs are shown in one go: they no longer count as waiting
+    m_PendingFrames -= job.interpolatedCount - first + 1;
+
     if (interpolated) {
-        if (!presentSlot(slot, true)) {
+        if (!presentSlot(slot, 0)) {
             return;
         }
-        if (m_Timed) {
-            waitUntil(m_LastPresentUs + (uint64_t)halfPeriodUs);
-        }
+        waitUntil(m_LastPresentUs + (uint64_t)halfPeriodUs);
     }
 
-    if (presentSlot(slot, false)) {
+    if (presentSlot(slot, -1)) {
         uint64_t latencyUs = LiGetMicroseconds() - job.submitUs;
         m_TotalLatencyUs += latencyUs;
+        m_LatencySamples++;
         m_MaxLatencyUs = SDL_max(m_MaxLatencyUs, latencyUs);
     }
 }
 
-bool D3D11FiPresenter::presentSlot(Slot& slot, bool interpolated)
+bool D3D11FiPresenter::presentSlot(Slot& slot, int index)
 {
+    bool interpolated = index >= 0;
     m_Callbacks.lock();
     uint64_t presentUs = LiGetMicroseconds();
     const bool duplicateDecoded = m_DuplicateDecodedForTest ||
         (m_Callbacks.duplicateDecodedForTest && m_Callbacks.duplicateDecodedForTest());
     ID3D11ShaderResourceView* view = interpolated && !duplicateDecoded
-        ? slot.interpolatedView.Get() : slot.decodedView.Get();
+        ? slot.interpolated[index].view.Get() : slot.decoded.view.Get();
     HRESULT hr = m_Callbacks.present(view,
                                      slot.width, slot.height, m_SyncInterval, m_PresentFlags);
     uint64_t presentedUs = LiGetMicroseconds();
@@ -362,7 +496,10 @@ bool D3D11FiPresenter::presentSlot(Slot& slot, bool interpolated)
         presentUs = LiGetMicroseconds();
     }
 
-    recordInterval(presentUs, interpolated);
+    // Half a stream frame apart is only the goal of timed presentation
+    if (m_Timed) {
+        recordInterval(presentUs, interpolated);
+    }
     m_LastPresentUs = presentUs;
     m_LastWasInterpolated = interpolated;
     m_Shown++;
@@ -468,16 +605,18 @@ void D3D11FiPresenter::logStats()
         return;
     }
 
-    uint64_t decoded = m_Shown - m_ShownInterpolated;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Frame interpolation pacing: %llu frames shown (%llu interpolated), %.2f ms stream period, "
                 "%llu/%llu intervals too short and %llu too long, %llu interpolated frames skipped to catch up, "
-                "%llu frames dropped, latency %.1f ms average and %.1f ms max",
+                "%llu refreshes beyond the interpolated frames, %llu skipped to catch up, %llu frames dropped, "
+                "latency %.1f ms average and %.1f ms max, display %.2f ms per frame (%.2f ms nominal)",
                 (unsigned long long)m_Shown, (unsigned long long)m_ShownInterpolated, m_PeriodUs / 1000.0,
                 (unsigned long long)m_ShortIntervals, (unsigned long long)m_Intervals,
                 (unsigned long long)m_LongIntervals, (unsigned long long)m_SkippedInterpolated,
+                (unsigned long long)m_UnplannedRefreshes, (unsigned long long)m_CatchUpRefreshes,
                 (unsigned long long)m_DroppedFrames,
-                decoded ? m_TotalLatencyUs / 1000.0 / decoded : 0.0, m_MaxLatencyUs / 1000.0);
+                m_LatencySamples ? m_TotalLatencyUs / 1000.0 / m_LatencySamples : 0.0, m_MaxLatencyUs / 1000.0,
+                m_MeasuredRefreshUs.load() / 1000.0, m_RefreshUs / 1000.0);
 
     uint64_t measured = m_RefreshHistogram[0] + m_RefreshHistogram[1] + m_RefreshHistogram[2] + m_RefreshHistogram[3];
     if (measured > 0) {

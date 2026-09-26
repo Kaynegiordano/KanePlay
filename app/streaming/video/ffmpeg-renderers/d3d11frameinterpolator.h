@@ -5,8 +5,8 @@
 
 #include <array>
 
-// Doubles the frame rate of the stream by drawing a motion compensated frame
-// halfway between each pair of decoded frames.
+// Raises the frame rate of the stream by drawing motion compensated frames
+// between each pair of decoded frames, at any phase between them.
 //
 // It only relies on D3D11 compute and pixel shaders (feature level 11.0), so it
 // works on any GPU the D3D11 renderer runs on, whatever the vendor.
@@ -31,7 +31,8 @@ public:
 
     // Both draw into the currently bound render target using the currently
     // bound vertex buffer, which must map the video with texcoords from 0 to 1.
-    void drawInterpolated();
+    // phase goes from 0 (the previous frame) to 1 (the current frame).
+    void drawInterpolated(float phase = 0.5f);
     void drawCurrent();
     void drawTexture(ID3D11ShaderResourceView* texture);
 
@@ -100,4 +101,5 @@ private:
     int m_MotionConstantsTemporal;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_FilterConstants;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_InterpolateConstants;
+    float m_InterpolatePhase;
 };

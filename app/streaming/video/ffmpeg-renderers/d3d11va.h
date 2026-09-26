@@ -186,6 +186,8 @@ private:
     char m_FiProblem[64];
     uint64_t m_FiSkippedBacklog;
     int64_t m_FiLastPts;
+    // With AMF, whether the built-in engine analyzed the previous frame
+    bool m_FiAnalyzedPrevious;
 
     // Diagnostics: consecutive frames saved on request (Ctrl+Alt+Shift+F)
     int m_FiCaptureRemaining;

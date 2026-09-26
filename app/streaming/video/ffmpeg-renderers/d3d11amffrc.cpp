@@ -216,13 +216,17 @@ struct D3D11AmfFrc::Impl
 
         bool ok = false;
         if (submit(inputs[0].Get()) == AMF_OK) {
-            // Nothing to interpolate from a single frame
+            // Nothing to interpolate from a single frame, but recent drivers
+            // give it back anyway. It's dropped, as in D3D11AmfFrc::submit().
             amf::AMFSurfacePtr early = queryOutput(20000);
             if (early != nullptr) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "AMF FRC: unexpected output after the first frame");
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "AMF FRC: output after the first frame, dropped");
+                early = nullptr;
+                drainOutputs();
             }
-            else if (submit(inputs[1].Get()) == AMF_OK) {
+
+            if (submit(inputs[1].Get()) == AMF_OK) {
                 amf::AMFSurfacePtr result = queryOutput(50000);
                 if (result == nullptr) {
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
@@ -233,7 +237,8 @@ struct D3D11AmfFrc::Impl
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "AMF FRC: self-test output %.3f between %.2f and %.2f",
                                 grey, greyA, greyB);
-                    ok = grey >= greyA - 0.02f && grey <= greyB + 0.02f;
+                    // Strictly between: a copy of either frame isn't interpolation
+                    ok = grey > greyA + 0.01f && grey < greyB - 0.01f;
                 }
             }
         }

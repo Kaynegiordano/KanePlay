@@ -47,7 +47,7 @@ struct InterpolateConstants
     float invVideoSize[2];
     float gridSize[2];
     float blockSize;
-    float padding;
+    float phase;
 };
 static_assert(sizeof(InterpolateConstants) % 16 == 0, "Constant buffer sizes must be a multiple of 16");
 
@@ -68,7 +68,8 @@ D3D11FrameInterpolator::D3D11FrameInterpolator() :
     m_ValidFrames(0),
     m_CurrentField(0),
     m_HasMotionHistory(false),
-    m_MotionConstantsTemporal(-1)
+    m_MotionConstantsTemporal(-1),
+    m_InterpolatePhase(0.5f)
 {
 
 }
@@ -353,6 +354,8 @@ bool D3D11FrameInterpolator::createSizeDependentResources(int width, int height)
         constants.gridSize[0] = (float)m_GridWidth;
         constants.gridSize[1] = (float)m_GridHeight;
         constants.blockSize = (float)k_BlockSize;
+        constants.phase = 0.5f;
+        m_InterpolatePhase = constants.phase;
 
         if (!createConstantBuffer(&constants, sizeof(constants), m_InterpolateConstants)) {
             return false;
@@ -481,8 +484,22 @@ bool D3D11FrameInterpolator::analyzeFrame()
     return true;
 }
 
-void D3D11FrameInterpolator::drawInterpolated()
+void D3D11FrameInterpolator::drawInterpolated(float phase)
 {
+    if (phase != m_InterpolatePhase) {
+        InterpolateConstants constants = {};
+        constants.videoSize[0] = (float)m_Width;
+        constants.videoSize[1] = (float)m_Height;
+        constants.invVideoSize[0] = 1.0f / m_Width;
+        constants.invVideoSize[1] = 1.0f / m_Height;
+        constants.gridSize[0] = (float)m_GridWidth;
+        constants.gridSize[1] = (float)m_GridHeight;
+        constants.blockSize = (float)k_BlockSize;
+        constants.phase = phase;
+        m_Context->UpdateSubresource(m_InterpolateConstants.Get(), 0, nullptr, &constants, 0, 0);
+        m_InterpolatePhase = phase;
+    }
+
     Frame& curr = m_Frames[m_CurrentFrame];
     Frame& prev = m_Frames[m_CurrentFrame ^ 1];
     ID3D11ShaderResourceView* inputs[5] = {
