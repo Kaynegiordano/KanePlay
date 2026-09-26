@@ -603,8 +603,8 @@ macx {
     }
 }
 
-# build-arch.bat stamps every build with a build number (4th field), so the
-# private update channel can tell builds of the same upstream version apart
+# The version of version.txt, as shown in the app and compared by the updater.
+# ML_BUILD_NUMBER, when set, adds a 4th field to tell test builds apart.
 ML_VERSION = $$cat(version.txt)
 ML_BUILD_NUMBER = $$(ML_BUILD_NUMBER)
 !isEmpty(ML_BUILD_NUMBER): ML_VERSION = $${ML_VERSION}.$${ML_BUILD_NUMBER}

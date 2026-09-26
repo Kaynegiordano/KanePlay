@@ -34,10 +34,15 @@ if (-not (Test-Path $exe) -or $null -eq $bundle) {
     throw "Build KanePlay and its installer first (build-arch.bat, then generate-bundle.bat release x64)"
 }
 
-# The full version, build number included, is what the app compares and names
-# the installer. The release is tagged with the version of version.txt.
-$version = (Get-Item $exe).VersionInfo.FileVersion
-$tag = "v" + (Get-Content (Join-Path $root "app\version.txt") -Raw).Trim()
+# The version of version.txt names the release and the installer, and is what
+# the app compares. The build must be of that version: a stale build would
+# publish an installer that reinstalls an older KanePlay.
+$version = (Get-Content (Join-Path $root "app\version.txt") -Raw).Trim()
+$exeVersion = (Get-Item $exe).VersionInfo.FileVersion
+if ($exeVersion -ne $version -and $exeVersion -ne "$version.0") {
+    throw "KanePlay.exe is version $exeVersion, not $version. Rebuild it with build-arch.bat"
+}
+$tag = "v" + $version
 $staging = Join-Path $root "build\release-$version"
 New-Item -ItemType Directory -Force $staging | Out-Null
 

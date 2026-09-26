@@ -120,12 +120,9 @@ if defined CI_VERSION (
     set /p VERSION=<%SOURCE_ROOT%\app\version.txt
 )
 
-rem Build number for the private update channel: hours since 2026, unless
-rem publier-maj.ps1 picked one (app.pro appends it to the version)
-if not defined ML_BUILD_NUMBER (
-    for /f %%i in ('powershell -NoProfile -Command "[math]::Floor(((Get-Date) - (Get-Date '2026-01-01')).TotalHours)"') do set ML_BUILD_NUMBER=%%i
-)
-echo Build number !ML_BUILD_NUMBER!
+rem The version is the one of version.txt. A test build can still set
+rem ML_BUILD_NUMBER, which app.pro appends as a 4th field.
+if defined ML_BUILD_NUMBER echo Build number !ML_BUILD_NUMBER!
 
 rem Use the correct VC tools for the specified architecture
 if /I "%ARCH%" EQU "x64" (
