@@ -333,6 +333,16 @@ private:
     int m_AudioSampleCount;
     Uint32 m_DropAudioEndTime;
 
+    // Lossless Scaling is turned on a few seconds into the stream, once its
+    // window is in front (see startLosslessScaling())
+    bool m_UseLosslessScaling = false;
+    SDL_TimerID m_LosslessScalingTimer = 0;
+    int m_LosslessScalingAttempts = 0;
+    // Its hotkey is pressed on the stream window: the keys aren't sent to the host
+    Uint32 m_IgnoreKeysUntil = 0;
+    void scheduleLosslessScaling(Uint32 delayMs);
+    void startLosslessScaling();
+
     Overlay::OverlayManager m_OverlayManager;
 
     StreamHealthMonitor* m_StreamHealthMonitor;

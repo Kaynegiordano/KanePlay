@@ -441,21 +441,39 @@ QtObject {
                 def: function() { return false }
             },
 
-            // Frame generation, left to other apps that do it well: they open
-            // from here, and are turned on in them
+            // Frame generation, left to other apps that do it well.
+            // AMD only lets its own software turn AFMF on: a KanePlay game
+            // profile there keeps it to KanePlay.
             {
                 key: "amdFluidMotionFrames", category: "framegen", icon: "layers", type: "action",
                 label: qsTr("AMD Fluid Motion Frames"),
-                desc: qsTr("Opens AMD Software: turn AFMF on for KanePlay"),
+                desc: qsTr("In AMD Software: Gaming › KanePlay › AFMF"),
+                actionLabel: qsTr("Open"),
                 available: function() { return Qt.platform.os === "windows" && SystemProperties.hasAmdGpu },
                 run: function() { return SystemProperties.launchAmdSoftware() }
             },
             {
-                key: "losslessScaling", category: "framegen", icon: "layers", type: "action",
+                key: "losslessScaling", category: "framegen", icon: "layers", type: "bool",
                 label: qsTr("Lossless Scaling"),
-                desc: qsTr("Opens Lossless Scaling, then Ctrl+Alt+S on KanePlay"),
-                available: function() { return Qt.platform.os === "windows" },
-                run: function() { return SystemProperties.launchLosslessScaling() }
+                desc: qsTr("Turned on for the stream, with its frame generation"),
+                available: function() { return Qt.platform.os === "windows" && SystemProperties.isLosslessScalingInstalled() },
+                get: function() { return StreamingPreferences.losslessScaling },
+                set: function(value) {
+                    StreamingPreferences.losslessScaling = value
+                    // Ready before the stream, in the tray
+                    if (value) {
+                        SystemProperties.startLosslessScaling()
+                    }
+                },
+                def: function() { return false }
+            },
+            {
+                key: "losslessScalingStore", category: "framegen", icon: "layers", type: "action",
+                label: qsTr("Lossless Scaling"),
+                desc: qsTr("Frame generation for any window, sold on Steam"),
+                actionLabel: qsTr("Buy on Steam"),
+                available: function() { return Qt.platform.os === "windows" && !SystemProperties.isLosslessScalingInstalled() },
+                run: function() { return SystemProperties.openLosslessScalingStore() }
             },
 
             // Network

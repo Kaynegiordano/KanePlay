@@ -170,7 +170,7 @@ AbstractButton {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Open")
+                text: tile.setting.actionLabel !== undefined ? tile.setting.actionLabel : qsTr("Open")
                 font.family: Theme.textFont
                 font.pixelSize: 14
                 font.weight: Font.Bold

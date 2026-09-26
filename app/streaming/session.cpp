@@ -2,6 +2,7 @@
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
 #include "streaming/vrrratepolicy.h"
+#include "streaming/losslessscaling.h"
 
 // Frame rate cap of the battery saver
 #define BATTERY_SAVER_MAX_FPS 60
@@ -9,6 +10,11 @@
 
 #include <Limelight.h>
 #include "SDL_compat.h"
+#include <SDL_syswm.h>
+
+#ifdef Q_OS_WIN32
+#include <Windows.h>
+#endif
 #include "utils.h"
 
 #ifdef HAVE_FFMPEG
@@ -32,6 +38,7 @@
 #define SDL_CODE_GAMECONTROLLER_SET_MOTION_EVENT_STATE 103
 #define SDL_CODE_GAMECONTROLLER_SET_CONTROLLER_LED 104
 #define SDL_CODE_GAMECONTROLLER_SET_ADAPTIVE_TRIGGERS 105
+#define SDL_CODE_LOSSLESS_SCALING 107
 
 #include <openssl/rand.h>
 
@@ -1047,6 +1054,12 @@ bool Session::initialize(QQuickWindow* qtWindow)
     if (m_PresentationSettings.enableVrr) {
         // Adaptive presentation requires borderless fullscreen. The saved
         // window-mode preference is intentionally left untouched.
+        m_FullScreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
+    }
+
+    // Lossless Scaling draws over a window, which exclusive fullscreen doesn't allow
+    m_UseLosslessScaling = m_Preferences->losslessScaling && !LosslessScaling::installedExe().isEmpty();
+    if (m_UseLosslessScaling) {
         m_FullScreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
 
@@ -2105,6 +2118,56 @@ void Session::flushWindowEvents()
     SDL_PushEvent(&flushEvent);
 }
 
+void Session::scheduleLosslessScaling(Uint32 delayMs)
+{
+    m_LosslessScalingTimer = SDL_AddTimer(delayMs, [](Uint32, void*) -> Uint32 {
+        SDL_Event event = {};
+        event.type = SDL_USEREVENT;
+        event.user.code = SDL_CODE_LOSSLESS_SCALING;
+        SDL_PushEvent(&event);
+        return 0;
+    }, nullptr);
+}
+
+void Session::startLosslessScaling()
+{
+    // It may take a while to start the first time
+    if (!LosslessScaling::isRunning()) {
+        if (++m_LosslessScalingAttempts < 5) {
+            scheduleLosslessScaling(2000);
+        }
+        else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Lossless Scaling: it didn't start");
+        }
+        return;
+    }
+
+#ifdef Q_OS_WIN32
+    // Starting it may have put its window in front: the hotkey scales the
+    // foreground window, so the stream comes back first. Windows only lets an
+    // app take the foreground after an input, hence the Alt press.
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (SDL_GetWindowWMInfo(m_Window, &info) && info.subsystem == SDL_SYSWM_WINDOWS) {
+        HWND window = info.info.win.window;
+        if (GetForegroundWindow() != window) {
+            INPUT alt[2] = {};
+            alt[0].type = alt[1].type = INPUT_KEYBOARD;
+            alt[0].ki.wVk = alt[1].ki.wVk = VK_MENU;
+            alt[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(2, alt, sizeof(INPUT));
+            SetForegroundWindow(window);
+        }
+    }
+#endif
+    SDL_RaiseWindow(m_Window);
+
+    m_IgnoreKeysUntil = SDL_GetTicks() + 500;
+    if (!LosslessScaling::pressHotkey()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Lossless Scaling: unable to press its hotkey");
+    }
+}
+
 void Session::setShouldExit(bool quitHostApp)
 {
     // If the caller has explicitly asked us to quit the host app,
@@ -2349,6 +2412,18 @@ void Session::exec()
         m_VideoDecoder->notifyWindowChanged(&windowChangeInfo);
     };
 
+    if (m_UseLosslessScaling) {
+        // Started now if needed, so it's ready once the stream shows
+        if (!LosslessScaling::isRunning()) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Lossless Scaling: starting it");
+            LosslessScaling::launch();
+            scheduleLosslessScaling(6000);
+        }
+        else {
+            scheduleLosslessScaling(2500);
+        }
+    }
+
     for (;;) {
 #if SDL_VERSION_ATLEAST(2, 0, 18) && !defined(STEAM_LINK)
         // SDL 2.0.18 has a proper wait event implementation that uses platform
@@ -2425,6 +2500,10 @@ void Session::exec()
             case SDL_CODE_GAMEPAD_COMBO_TIMEOUT:
                 m_InputHandler->handleGamepadComboTimeout((int)((uintptr_t)event.user.data1 >> 24),
                                                           (uint32_t)((uintptr_t)event.user.data1 & 0xFFFFFF));
+                break;
+            case SDL_CODE_LOSSLESS_SCALING:
+                m_LosslessScalingTimer = 0;
+                startLosslessScaling();
                 break;
             default:
                 SDL_assert(false);
@@ -2689,6 +2768,9 @@ void Session::exec()
 
         case SDL_KEYUP:
         case SDL_KEYDOWN:
+            if (m_IgnoreKeysUntil != 0 && !SDL_TICKS_PASSED(SDL_GetTicks(), m_IgnoreKeysUntil)) {
+                break;
+            }
             presence.runCallbacks();
             m_InputHandler->handleKeyEvent(&event.key);
             break;
@@ -2750,6 +2832,11 @@ void Session::exec()
     }
 
 DispatchDeferredCleanup:
+    if (m_LosslessScalingTimer != 0) {
+        SDL_RemoveTimer(m_LosslessScalingTimer);
+        m_LosslessScalingTimer = 0;
+    }
+
     // Switch back to synchronous logging mode
     StreamUtils::exitAsyncLoggingMode();
 

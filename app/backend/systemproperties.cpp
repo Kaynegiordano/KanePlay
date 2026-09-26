@@ -13,6 +13,7 @@
 
 #include "streaming/session.h"
 #include "streaming/streamutils.h"
+#include "streaming/losslessscaling.h"
 
 #ifdef Q_OS_WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -21,8 +22,6 @@
 #include <wrl/client.h>
 #endif
 
-// Lossless Scaling's Steam app ID
-#define LOSSLESS_SCALING_APP_ID "993090"
 
 static bool detectAmdGpu()
 {
@@ -179,26 +178,25 @@ bool SystemProperties::launchAmdSoftware()
     return false;
 }
 
-bool SystemProperties::launchLosslessScaling()
+bool SystemProperties::isLosslessScalingInstalled()
+{
+    return !LosslessScaling::installedExe().isEmpty();
+}
+
+bool SystemProperties::startLosslessScaling()
+{
+    return LosslessScaling::isRunning() || LosslessScaling::launch();
+}
+
+bool SystemProperties::openLosslessScalingStore()
 {
 #ifdef Q_OS_WIN32
-    // Installed by Steam: started directly, so Steam doesn't need to be running
-    QSettings steamApp("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App " LOSSLESS_SCALING_APP_ID,
-                       QSettings::Registry64Format);
-    QString installDir = steamApp.value("InstallLocation").toString();
-    QString exe = installDir + "/LosslessScaling.exe";
-    if (!installDir.isEmpty() && QFileInfo::exists(exe) &&
-            QProcess::startDetached(exe, QStringList(), installDir)) {
-        return true;
-    }
-
-    // Otherwise Steam starts it, or shows its store page if it isn't owned
     QSettings steam("HKEY_CURRENT_USER\\Software\\Valve\\Steam", QSettings::NativeFormat);
     if (!steam.value("SteamExe").toString().isEmpty()) {
-        return QDesktopServices::openUrl(QUrl("steam://rungameid/" LOSSLESS_SCALING_APP_ID));
+        return QDesktopServices::openUrl(QUrl(QString("steam://store/") + LosslessScaling::k_SteamAppId));
     }
 #endif
-    return QDesktopServices::openUrl(QUrl("https://store.steampowered.com/app/" LOSSLESS_SCALING_APP_ID "/"));
+    return QDesktopServices::openUrl(QUrl(QString("https://store.steampowered.com/app/") + LosslessScaling::k_SteamAppId + "/"));
 }
 
 void SystemProperties::updateDecoderProperties(bool hasHardwareAcceleration, bool rendererAlwaysFullScreen, QSize maximumResolution, bool supportsHdr)

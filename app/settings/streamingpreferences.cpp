@@ -34,6 +34,7 @@
 #define SER_LEARNEDBITRATES "learnedbitrates"
 #define SER_LASTSESSIONS "lastsessions"
 #define SER_AUTORECONNECT "autoreconnect"
+#define SER_LOSSLESSSCALING "losslessscaling"
 #define SER_BATTERYSAVER "batterysaver"
 #define SER_UISOUNDS "uisounds"
 #define SER_UISOUNDVOLUME "uisoundvolume"
@@ -163,6 +164,7 @@ void StreamingPreferences::reload()
     learnBitrate = settings.value(SER_LEARNBITRATE, true).toBool();
     autoFramePacing = settings.value(SER_AUTOFRAMEPACING, true).toBool();
     autoReconnect = settings.value(SER_AUTORECONNECT, true).toBool();
+    losslessScaling = settings.value(SER_LOSSLESSSCALING, false).toBool();
     batterySaver = settings.value(SER_BATTERYSAVER, true).toBool();
     uiSounds = settings.value(SER_UISOUNDS, true).toBool();
     uiSoundVolume = qBound(0, settings.value(SER_UISOUNDVOLUME, 60).toInt(), 100);
@@ -383,6 +385,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_LEARNBITRATE, learnBitrate);
     settings.setValue(SER_AUTOFRAMEPACING, autoFramePacing);
     settings.setValue(SER_AUTORECONNECT, autoReconnect);
+    settings.setValue(SER_LOSSLESSSCALING, losslessScaling);
     settings.setValue(SER_BATTERYSAVER, batterySaver);
     settings.setValue(SER_UISOUNDS, uiSounds);
     settings.setValue(SER_UISOUNDVOLUME, uiSoundVolume);

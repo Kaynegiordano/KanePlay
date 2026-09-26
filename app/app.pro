@@ -192,6 +192,7 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/session.cpp \
+    streaming/losslessscaling.cpp \
     streaming/streamhealth.cpp \
     streaming/ingamemenu.cpp \
     streaming/audio/audio.cpp \
@@ -233,6 +234,7 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/session.h \
+    streaming/losslessscaling.h \
     streaming/streamhealth.h \
     streaming/ingamemenu.h \
     streaming/audio/renderers/renderer.h \

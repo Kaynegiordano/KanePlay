@@ -152,6 +152,8 @@ public:
     Q_PROPERTY(bool autoAdjustBitrate MEMBER autoAdjustBitrate NOTIFY autoAdjustBitrateChanged)
     Q_PROPERTY(bool learnBitrate MEMBER learnBitrate NOTIFY learnBitrateChanged)
     Q_PROPERTY(bool autoReconnect MEMBER autoReconnect NOTIFY autoReconnectChanged)
+    // Turn Lossless Scaling on for the stream window (see LosslessScaling)
+    Q_PROPERTY(bool losslessScaling MEMBER losslessScaling NOTIFY losslessScalingChanged)
     Q_PROPERTY(bool batterySaver MEMBER batterySaver NOTIFY batterySaverChanged)
     Q_PROPERTY(bool uiSounds MEMBER uiSounds NOTIFY uiSoundsChanged)
     Q_PROPERTY(int uiSoundVolume MEMBER uiSoundVolume NOTIFY uiSoundsChanged)
@@ -218,6 +220,7 @@ public:
     bool autoAdjustBitrate;
     bool learnBitrate;
     bool autoReconnect;
+    bool losslessScaling;
     bool batterySaver;
     bool uiSounds;
     int uiSoundVolume;
@@ -273,6 +276,7 @@ signals:
     void autoAdjustBitrateChanged();
     void learnBitrateChanged();
     void autoReconnectChanged();
+    void losslessScalingChanged();
     void batterySaverChanged();
     void uiSoundsChanged();
     void lastPcUuidChanged();

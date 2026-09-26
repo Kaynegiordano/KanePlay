@@ -1655,12 +1655,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+534"/>
+        <location line="+552"/>
         <source>Audio</source>
         <translation>Son</translation>
     </message>
     <message>
-        <location line="-533"/>
+        <location line="-551"/>
         <source>Gamepads</source>
         <translation>Manettes</translation>
     </message>
@@ -1681,7 +1681,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+559"/>
+        <location line="+577"/>
         <source>Off</source>
         <translation>Désactivé</translation>
     </message>
@@ -1690,7 +1690,7 @@
         <translation type="vanished">Coupée par le doubleur d’images · A coupe le doubleur</translation>
     </message>
     <message>
-        <location line="-521"/>
+        <location line="-539"/>
         <source>Needs V-Sync · A turns it on</source>
         <translation>Nécessite la synchro verticale · A l’active</translation>
     </message>
@@ -1699,12 +1699,12 @@
         <location line="+52"/>
         <location line="+68"/>
         <location line="+99"/>
-        <location line="+278"/>
+        <location line="+296"/>
         <source>Automatic</source>
         <translation>Automatique</translation>
     </message>
     <message>
-        <location line="-481"/>
+        <location line="-499"/>
         <source>Native (%1)</source>
         <translation>Native (%1)</translation>
     </message>
@@ -1737,12 +1737,12 @@
     </message>
     <message>
         <location line="-6"/>
-        <location line="+621"/>
+        <location line="+639"/>
         <source>%1 FPS</source>
         <translation>%1 i/s</translation>
     </message>
     <message>
-        <location line="-603"/>
+        <location line="-621"/>
         <source>Resolution</source>
         <translation>Résolution</translation>
     </message>
@@ -1859,24 +1859,24 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+253"/>
+        <location line="+271"/>
         <location line="+112"/>
         <source>Fullscreen</source>
         <translation>Plein écran</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-382"/>
         <source>Borderless</source>
         <translation>Sans bordure</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+361"/>
+        <location line="+379"/>
         <source>Windowed</source>
         <translation>Fenêtré</translation>
     </message>
     <message>
-        <location line="-352"/>
+        <location line="-370"/>
         <source>Video decoder</source>
         <translation>Décodeur vidéo</translation>
     </message>
@@ -1951,24 +1951,48 @@
         <translation>Génération d’images</translation>
     </message>
     <message>
-        <location line="+416"/>
+        <location line="+417"/>
         <source>AMD Fluid Motion Frames</source>
         <translation>AMD Fluid Motion Frames</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Opens AMD Software: turn AFMF on for KanePlay</source>
-        <translation>Ouvre AMD Software : active AFMF pour KanePlay</translation>
+        <translation type="vanished">Ouvre AMD Software : active AFMF pour KanePlay</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
+        <location line="+15"/>
         <source>Lossless Scaling</source>
         <translation>Lossless Scaling</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Opens Lossless Scaling, then Ctrl+Alt+S on KanePlay</source>
-        <translation>Ouvre Lossless Scaling, puis Ctrl+Alt+S sur KanePlay</translation>
+        <translation type="vanished">Ouvre Lossless Scaling, puis Ctrl+Alt+S sur KanePlay</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>In AMD Software: Gaming › KanePlay › AFMF</source>
+        <translation>Dans AMD Software : Jeux › KanePlay › AFMF</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open</source>
+        <translation>Ouvrir</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Turned on for the stream, with its frame generation</source>
+        <translation>Activé pendant le stream, avec sa génération d’images</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Frame generation for any window, sold on Steam</source>
+        <translation>Génération d’images pour toute fenêtre, vendu sur Steam</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Buy on Steam</source>
+        <translation>Acheter sur Steam</translation>
     </message>
     <message>
         <location line="+8"/>

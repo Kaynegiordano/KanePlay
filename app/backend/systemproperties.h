@@ -53,7 +53,11 @@ public:
     // Frame generation is left to other apps, which KanePlay starts.
     // They return false if the app can't be found or started.
     Q_INVOKABLE bool launchAmdSoftware();
-    Q_INVOKABLE bool launchLosslessScaling();
+    Q_INVOKABLE bool isLosslessScalingInstalled();
+    // Starts it unless it's running already
+    Q_INVOKABLE bool startLosslessScaling();
+    // Its Steam store page, through Steam when it's installed
+    Q_INVOKABLE bool openLosslessScalingStore();
 
 signals:
     void unmappedGamepadsChanged();
