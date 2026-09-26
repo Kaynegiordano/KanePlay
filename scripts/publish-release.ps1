@@ -63,11 +63,15 @@ $manifestPath = Join-Path $staging "update.json"
 # UTF-8 without BOM
 [IO.File]::WriteAllText($manifestPath, (ConvertTo-Json -InputObject $manifest -Depth 3), (New-Object Text.UTF8Encoding $false))
 
+# The notes go to gh through a file: Windows PowerShell mangles quotes in arguments
+$notesPath = Join-Path $staging "notes.md"
+[IO.File]::WriteAllText($notesPath, $manifest[0].notes, (New-Object Text.UTF8Encoding $false))
+
 Write-Host "Release $tag ($version)"
 Write-Host "  $installer"
 Write-Host "  $manifestPath"
 
-$ghArgs = @("release", "create", $tag, $installer, $manifestPath, "--repo", $Repo, "--title", "KanePlay $($tag.Substring(1))", "--notes", $manifest[0].notes)
+$ghArgs = @("release", "create", $tag, $installer, $manifestPath, "--repo", $Repo, "--title", "KanePlay $($tag.Substring(1))", "--notes-file", $notesPath)
 if ($Draft) {
     $ghArgs += "--draft"
 }
