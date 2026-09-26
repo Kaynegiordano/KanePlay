@@ -111,7 +111,16 @@
     </DirectoryRef>
 
     <ComponentGroup Id="KanePlayDependencies" Directory="INSTALLFOLDER">
-      <Files Include="$(var.DeployDir)\**" />
+      <Files Include="$(var.DeployDir)\**">
+        <!-- The executable is authored above. Portable packages and VC runtime
+             files may be present in a reused deploy folder but do not belong in the MSI. -->
+        <Exclude Files="$(var.DeployDir)\KanePlay.exe" />
+        <Exclude Files="$(var.DeployDir)\portable.dat" />
+        <Exclude Files="$(var.DeployDir)\portable.dat.inactive" />
+        <Exclude Files="$(var.DeployDir)\concrt140.dll" />
+        <Exclude Files="$(var.DeployDir)\msvcp140*.dll" />
+        <Exclude Files="$(var.DeployDir)\vcruntime140*.dll" />
+      </Files>
     </ComponentGroup>
 
     <Feature Id="ProductFeature" Title="KanePlay" Level="1" ConfigurableDirectory="INSTALLFOLDER">

@@ -366,9 +366,11 @@ void AutoUpdateChecker::launchInstaller()
 #ifdef Q_OS_WIN32
     QString setupPath = QDir::toNativeSeparators(m_InstallerFile.fileName());
     QString exePath = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    QString logPath = QDir::toNativeSeparators(QFileInfo(m_InstallerFile).dir().filePath("install.log"));
 
     // The installer can only replace KanePlay once it has exited, and the
-    // script relaunches it whether the install went through or was cancelled
+    // script relaunches it only after a successful installation. Keep the
+    // installer and its log when Burn fails so the failure can be diagnosed.
     QFile script(QFileInfo(m_InstallerFile).dir().filePath("installer.cmd"));
     if (!script.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         emit updateDownloadFailed(script.errorString());
@@ -377,10 +379,16 @@ void AutoUpdateChecker::launchInstaller()
     script.write(QString("@echo off\r\n"
                          "chcp 65001 >nul\r\n"
                          "ping -n 3 127.0.0.1 >nul\r\n"
-                         "start \"\" /wait \"%1\" /passive /norestart\r\n"
+                         "start \"\" /wait \"%1\" /passive /norestart -l \"%3\"\r\n"
+                         "set \"installResult=%errorlevel%\"\r\n"
+                         "if \"%installResult%\"==\"0\" goto success\r\n"
+                         "if \"%installResult%\"==\"3010\" goto success\r\n"
+                         "powershell -NoProfile -WindowStyle Hidden -Command \"Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('KanePlay installation failed (code %installResult%). Log: %3')\"\r\n"
+                         "exit /b %installResult%\r\n"
+                         ":success\r\n"
                          "del \"%1\"\r\n"
                          "start \"\" \"%2\"\r\n")
-                 .arg(setupPath, exePath).toUtf8());
+                 .arg(setupPath, exePath, logPath).toUtf8());
     script.close();
 
     QProcess process;
