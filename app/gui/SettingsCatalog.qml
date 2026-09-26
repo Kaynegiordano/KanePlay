@@ -130,19 +130,21 @@ QtObject {
         return setting.locked !== undefined ? setting.locked() : ""
     }
 
-    // V-Sync as the stream will use it: the frame doubler turns it off
-    function vsyncActive() {
+    // Frame pacing and VRR need V-Sync, and the frame doubler paces its frames itself
+    function pacingAllowed() {
         return StreamingPreferences.enableVsync && !StreamingPreferences.frameInterpolation
     }
 
-    function vsyncLockReason() {
-        return StreamingPreferences.frameInterpolation ? qsTr("Off with the frame doubler · A turns the doubler off")
+    function pacingLockReason() {
+        return StreamingPreferences.frameInterpolation ? qsTr("Handled by the frame doubler")
                                                        : qsTr("Needs V-Sync · A turns it on")
     }
 
-    function unlockVsync() {
-        StreamingPreferences.frameInterpolation = false
-        StreamingPreferences.enableVsync = true
+    // Nothing to turn on while the frame doubler handles it
+    function unlockPacing() {
+        if (!StreamingPreferences.frameInterpolation) {
+            StreamingPreferences.enableVsync = true
+        }
     }
 
     // Whether this display can show twice the frame rate of the stream, which
@@ -360,12 +362,9 @@ QtObject {
             {
                 key: "vsync", category: "image", icon: "check", type: "bool",
                 label: qsTr("V-Sync"),
+                // Static: the settings list is built once, a binding here would rebuild it
                 desc: qsTr("Removes tearing. Without it, latency is a little lower."),
-                // The frame doubler times its frames itself
-                enabled: function() { return !StreamingPreferences.frameInterpolation },
-                locked: function() { return qsTr("Off with the frame doubler · A turns the doubler off") },
-                unlock: function() { StreamingPreferences.frameInterpolation = false },
-                get: function() { return StreamingPreferences.enableVsync && !StreamingPreferences.frameInterpolation },
+                get: function() { return StreamingPreferences.enableVsync },
                 set: function(value) { StreamingPreferences.enableVsync = value },
                 def: function() { return true },
                 companions: ["framePacing", "autoFramePacing", "vrr"]
@@ -374,10 +373,10 @@ QtObject {
                 key: "framePacing", category: "image", icon: "clock", type: "bool",
                 label: qsTr("Frame pacing"),
                 desc: qsTr("Smoother, a little more latency"),
-                enabled: function() { return vsyncActive() },
-                locked: vsyncLockReason,
-                unlock: unlockVsync,
-                get: function() { return vsyncActive() && StreamingPreferences.framePacing },
+                enabled: function() { return pacingAllowed() },
+                locked: pacingLockReason,
+                unlock: unlockPacing,
+                get: function() { return pacingAllowed() && StreamingPreferences.framePacing },
                 set: function(value) { StreamingPreferences.framePacing = value },
                 def: function() { return true }
             },
@@ -385,11 +384,13 @@ QtObject {
                 key: "autoFramePacing", category: "image", icon: "clock", type: "bool",
                 label: qsTr("Pacing only when needed"),
                 desc: qsTr("Only while frames arrive irregularly"),
-                enabled: function() { return vsyncActive() && StreamingPreferences.framePacing },
-                locked: function() { return vsyncActive() ? qsTr("Needs frame pacing · A turns it on") : vsyncLockReason() },
+                enabled: function() { return pacingAllowed() && StreamingPreferences.framePacing },
+                locked: function() { return pacingAllowed() ? qsTr("Needs frame pacing · A turns it on") : pacingLockReason() },
                 unlock: function() {
-                    unlockVsync()
-                    StreamingPreferences.framePacing = true
+                    unlockPacing()
+                    if (pacingAllowed()) {
+                        StreamingPreferences.framePacing = true
+                    }
                 },
                 get: function() { return StreamingPreferences.autoFramePacing },
                 set: function(value) { StreamingPreferences.autoFramePacing = value },
@@ -399,9 +400,12 @@ QtObject {
                 key: "vrr", category: "image", icon: "monitor", type: "bool",
                 label: qsTr("VRR"),
                 desc: qsTr("Variable refresh rate, needs V-Sync"),
-                enabled: function() { return vsyncActive() },
-                locked: vsyncLockReason,
-                unlock: unlockVsync,
+                enabled: function() { return pacingAllowed() },
+                locked: function() {
+                    return StreamingPreferences.frameInterpolation ? qsTr("Off with the frame doubler: turn V-Sync off instead")
+                                                                   : pacingLockReason()
+                },
+                unlock: unlockPacing,
                 get: function() { return StreamingPreferences.enableVrr },
                 set: function(value) { StreamingPreferences.enableVrr = value },
                 def: function() { return false }
@@ -412,7 +416,7 @@ QtObject {
                 desc: qsTr("Borderless works better with Alt+Tab and overlays"),
                 available: function() { return SystemProperties.hasDesktopEnvironment },
                 // An active VRR session always uses borderless fullscreen
-                enabled: function() { return !SystemProperties.rendererAlwaysFullScreen && !(vsyncActive() && StreamingPreferences.enableVrr) },
+                enabled: function() { return !SystemProperties.rendererAlwaysFullScreen && !(pacingAllowed() && StreamingPreferences.enableVrr) },
                 locked: function() {
                     return SystemProperties.rendererAlwaysFullScreen ? qsTr("Always fullscreen on this device")
                                                                      : qsTr("VRR always uses borderless fullscreen")
@@ -461,7 +465,7 @@ QtObject {
             {
                 key: "frameInterpolation", category: "framegen", icon: "layers", type: "bool",
                 label: qsTr("Frame doubler ×2"),
-                desc: qsTr("Draws a frame between two: 60 FPS are shown at 120. V-Sync and frame pacing are turned off."),
+                desc: qsTr("Draws a frame between two: 60 FPS are shown at 120. Keep V-Sync on, or off on a VRR display."),
                 available: function() { return Qt.platform.os === "windows" },
                 get: function() { return StreamingPreferences.frameInterpolation },
                 set: function(value) { StreamingPreferences.frameInterpolation = value },

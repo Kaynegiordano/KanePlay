@@ -2,6 +2,7 @@
 
 #include "d3d11frameinterpolator.h"
 #include "d3d11amffrc.h"
+#include "d3d11fipresenter.h"
 #include "ivrrframepresenter.h"
 #include "renderer.h"
 
@@ -69,9 +70,10 @@ private:
     void setDisplayViewport();
     bool initializeFrameInterpolation();
     void renderInterpolatedFrame(AVFrame* frame);
-    void bindFrameInterpolationVertexBuffer(AVFrame* frame, bool convert);
-    void waitForInterpolatedFrame(bool fenceSignalled, uint64_t presentUs);
-    UINT getPendingPresentCount();
+    void bindFrameInterpolationVertexBuffer(AVFrame* frame);
+    void bindVertexBuffer(Microsoft::WRL::ComPtr<ID3D11Buffer>& vertexBuffer, const SDL_FRect& rect, float uMax, float vMax);
+    HRESULT presentInterpolationFrame(ID3D11ShaderResourceView* frame, int width, int height, UINT syncInterval, UINT flags);
+    ID3D11ShaderResourceView* interpolateWithAmdFrc(AVFrame* frame);
     void captureInterpolatorFrame(AVFrame* frame);
     bool initializeVrrPresentReadyFence();
     bool waitForVrrPresentReady();
@@ -168,12 +170,16 @@ private:
     std::unique_ptr<D3D11AmfFrc> m_AmdFrc;
     int m_AmdFrcWidth = 0;
     int m_AmdFrcHeight = 0;
+    // Its motion search at full resolution, until it proves too slow
+    bool m_AmdFrcFastSearch = false;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiConvertVertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiFullVertexBuffer;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_FiDisplayVertexBuffer;
-    Microsoft::WRL::ComPtr<ID3D11Fence> m_FiFence;
-    UINT64 m_FiFenceValue;
-    HANDLE m_FiFenceEvent;
-    HANDLE m_FiTimer;
+    int m_FiDisplayVideoWidth = 0;
+    int m_FiDisplayVideoHeight = 0;
+
+    // Shows the frames at an even pace, from a thread of its own
+    std::unique_ptr<D3D11FiPresenter> m_FiPresenter;
     uint64_t m_FiInterpolatedFrames;
     uint64_t m_FiDecodedFrames;
     uint64_t m_FiSkippedGaps;

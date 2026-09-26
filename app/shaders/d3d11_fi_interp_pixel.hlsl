@@ -34,6 +34,11 @@ struct ShaderInput
 #define STATIC_START 0.015
 #define STATIC_END 0.04
 
+// Disagreement between the two frames along the chosen motion from which the
+// next frame is shown instead of a blend (see main())
+#define FALLBACK_START 0.07
+#define FALLBACK_END 0.18
+
 // Distance of the neighbourhood samples, in full resolution pixels
 #define NEIGHBOURHOOD_RADIUS 3.0
 
@@ -137,7 +142,21 @@ float4 main(ShaderInput input) : SV_TARGET
     // Meet halfway along the chosen motion
     float4 a = sampleSharp(prevFrame, pos - bestVector);
     float4 b = sampleSharp(currFrame, pos + bestVector);
-    float4 result = lerp((a + b) * 0.5, current, staticWeight);
+    float4 blend = (a + b) * 0.5;
+
+    // Where the two frames still disagree along the best motion, something
+    // appeared or disappeared (or the motion is wrong, or the scene changed).
+    // Blending there shows a half transparent double image between two sharp
+    // frames, which flickers. The next frame is shown there instead: the change
+    // just appears half a frame early.
+    // Mostly measured around the pixel: a single pixel on a sharp edge disagrees
+    // a lot as soon as the motion is off by a fraction of a pixel.
+    float disagreement = neighbourhoodMismatch(pos - bestVector, pos + bestVector) +
+                         abs(luma(a.rgb) - luma(b.rgb)) * 0.5;
+    float fallback = smoothstep(FALLBACK_START, FALLBACK_END, disagreement);
+    blend = lerp(blend, current, fallback);
+
+    float4 result = lerp(blend, current, staticWeight);
 
     return float4(result.rgb, 1.0);
 }

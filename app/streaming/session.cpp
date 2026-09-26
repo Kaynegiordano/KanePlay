@@ -2625,20 +2625,22 @@ void Session::exec()
                     enableVsync = false;
                 }
 
-                // The frame doubler times the frames it adds itself. V-sync and
-                // frame pacing on top of it make the picture stutter and flicker,
-                // so they're off whenever the display can show the doubled rate.
-                if (enableVsync && m_Preferences->frameInterpolation &&
-                        displayHz * 10 >= m_StreamConfig.fps * 18) {
+                // The frame doubler paces the frames it shows on a thread of its
+                // own (see D3D11FiPresenter), so the pacer must stay out of its way.
+                // V-sync stays: with it, frames are queued one refresh each, without
+                // it they're timed, which suits VRR displays.
+                bool frameDoubler = m_Preferences->frameInterpolation &&
+                        displayHz * 10 >= m_StreamConfig.fps * 18;
+                if (frameDoubler) {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                                "Disabling V-sync and frame pacing for the frame doubler");
-                    enableVsync = false;
+                                "Frame pacing is left to the frame doubler (V-sync %s)",
+                                enableVsync ? "on" : "off");
                 }
 
                 // A VRR request that was rejected still runs on the fixed
                 // V-sync fallback, so keep that fallback paced even if the
                 // separate frame pacing option is off.
-                bool enableFramePacing = enableVsync &&
+                bool enableFramePacing = enableVsync && !frameDoubler &&
                         (m_Preferences->framePacing ||
                          (m_Preferences->enableVrr && !m_PresentationSettings.enableVrr));
 

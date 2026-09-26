@@ -36,6 +36,7 @@ AbstractButton {
             }
             setting.unlock()
             if (!catalog.isEnabled(setting)) {
+                UiSound.play("error")
                 return
             }
         }

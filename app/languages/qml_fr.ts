@@ -1645,12 +1645,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+556"/>
+        <location line="+560"/>
         <source>Audio</source>
         <translation>Son</translation>
     </message>
     <message>
-        <location line="-555"/>
+        <location line="-559"/>
         <source>Gamepads</source>
         <translation>Manettes</translation>
     </message>
@@ -1671,32 +1671,30 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+581"/>
+        <location line="+585"/>
         <source>Off</source>
         <translation>Désactivé</translation>
     </message>
     <message>
-        <location line="-543"/>
-        <location line="+227"/>
         <source>Off with the frame doubler · A turns the doubler off</source>
-        <translation>Coupée par le doubleur d’images · A coupe le doubleur</translation>
+        <translation type="vanished">Coupée par le doubleur d’images · A coupe le doubleur</translation>
     </message>
     <message>
-        <location line="-226"/>
+        <location line="-546"/>
         <source>Needs V-Sync · A turns it on</source>
         <translation>Nécessite la synchro verticale · A l’active</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+80"/>
         <location line="+52"/>
         <location line="+69"/>
-        <location line="+100"/>
+        <location line="+102"/>
         <location line="+284"/>
         <source>Automatic</source>
         <translation>Automatique</translation>
     </message>
     <message>
-        <location line="-489"/>
+        <location line="-491"/>
         <source>Native (%1)</source>
         <translation>Native (%1)</translation>
     </message>
@@ -1729,12 +1727,12 @@
     </message>
     <message>
         <location line="-6"/>
-        <location line="+629"/>
+        <location line="+631"/>
         <source>%1 FPS</source>
         <translation>%1 i/s</translation>
     </message>
     <message>
-        <location line="-611"/>
+        <location line="-613"/>
         <source>Resolution</source>
         <translation>Résolution</translation>
     </message>
@@ -1785,12 +1783,12 @@
         <translation>Synchro verticale</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Removes tearing. Without it, latency is a little lower.</source>
         <translation>Supprime les déchirures d’image. Sans elle, la latence est un peu plus basse.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+8"/>
         <source>Frame pacing</source>
         <translation>Cadencement des images</translation>
     </message>
@@ -1815,7 +1813,7 @@
         <translation>Nécessite le frame pacing · A l’active</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+13"/>
         <source>VRR</source>
         <translation>VRR</translation>
     </message>
@@ -1825,7 +1823,7 @@
         <translation>Fréquence variable, demande la synchro verticale</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+13"/>
         <source>Display mode</source>
         <translation>Mode d’affichage</translation>
     </message>
@@ -1911,9 +1909,23 @@
         <translation>Texte plus net, plus de débit. Peu de GPU le décodent (pas ceux d’AMD).</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Draws a frame between two: 60 FPS are shown at 120. V-Sync and frame pacing are turned off.</source>
-        <translation>Dessine une image entre deux : 60 i/s affichées à 120. Coupe la synchro verticale et le frame pacing.</translation>
+        <translation type="vanished">Dessine une image entre deux : 60 i/s affichées à 120. Coupe la synchro verticale et le frame pacing.</translation>
+    </message>
+    <message>
+        <location line="-316"/>
+        <source>Handled by the frame doubler</source>
+        <translation>Géré par le doubleur d’images</translation>
+    </message>
+    <message>
+        <location line="+266"/>
+        <source>Off with the frame doubler: turn V-Sync off instead</source>
+        <translation>Coupé avec le doubleur : désactivez plutôt la synchro verticale</translation>
+    </message>
+    <message>
+        <location line="+63"/>
+        <source>Draws a frame between two: 60 FPS are shown at 120. Keep V-Sync on, or off on a VRR display.</source>
+        <translation>Dessine une image entre deux : 60 i/s affichées à 120. Synchro verticale activée, ou désactivée sur un écran VRR.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2500,9 +2512,18 @@
         <translation>Non pris en charge ici</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
+        <source>Doubler: one refresh per frame</source>
+        <translation>Doubleur : une image par rafraîchissement</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Doubler: timed frames</source>
+        <translation>Doubleur : images minutées</translation>
+    </message>
+    <message>
         <source>Off with the frame doubler</source>
-        <translation>Coupée par le doubleur d’images</translation>
+        <translation type="vanished">Coupée par le doubleur d’images</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2598,7 +2619,7 @@
         <translation type="vanished">Entrez une fréquence d&apos;images personnalisée :</translation>
     </message>
     <message>
-        <location line="-39"/>
+        <location line="-40"/>
         <source>%1 FPS</source>
         <translation>%1 i/s</translation>
     </message>
@@ -3032,7 +3053,7 @@
         <translation type="vanished">Image et réseau</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Audio</source>
         <translation>Son</translation>
     </message>

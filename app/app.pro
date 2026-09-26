@@ -418,6 +418,7 @@ win32:!winrt {
         streaming/video/ffmpeg-renderers/d3d11va.cpp \
         streaming/video/ffmpeg-renderers/d3d11frameinterpolator.cpp \
         streaming/video/ffmpeg-renderers/d3d11amffrc.cpp \
+        streaming/video/ffmpeg-renderers/d3d11fipresenter.cpp \
         streaming/video/ffmpeg-renderers/pacer/dxvsyncsource.cpp
 
     HEADERS += \
@@ -425,6 +426,7 @@ win32:!winrt {
         streaming/video/ffmpeg-renderers/d3d11va.h \
         streaming/video/ffmpeg-renderers/d3d11frameinterpolator.h \
         streaming/video/ffmpeg-renderers/d3d11amffrc.h \
+        streaming/video/ffmpeg-renderers/d3d11fipresenter.h \
         streaming/video/ffmpeg-renderers/pacer/dxvsyncsource.h
 }
 macx {

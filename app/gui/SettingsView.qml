@@ -439,8 +439,9 @@ FocusScope {
                         },
                         {
                             key: "vsync", icon: "check", label: qsTr("V-Sync"),
-                            value: settingsCatalog.vsyncActive() ? qsTr("On") : qsTr("Off"),
-                            sub: StreamingPreferences.frameInterpolation ? qsTr("Off with the frame doubler") :
+                            value: StreamingPreferences.enableVsync ? qsTr("On") : qsTr("Off"),
+                            sub: StreamingPreferences.frameInterpolation ?
+                                     (StreamingPreferences.enableVsync ? qsTr("Doubler: one refresh per frame") : qsTr("Doubler: timed frames")) :
                                  !StreamingPreferences.enableVsync ? qsTr("Lowest latency") :
                                  StreamingPreferences.enableVrr ? qsTr("With VRR") :
                                  StreamingPreferences.framePacing ? qsTr("With frame pacing") : qsTr("No tearing")

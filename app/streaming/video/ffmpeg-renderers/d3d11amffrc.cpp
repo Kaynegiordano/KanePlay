@@ -16,10 +16,6 @@ static const GUID k_AMFTextureArrayIndexGUID = { 0x28115527, 0xe7c3, 0x4b66, { 0
 // DX11 support in FRC arrived with AMF 1.4.34
 #define AMF_FRC_DX11_MIN_VERSION AMF_MAKE_FULL_VERSION(1, 4, 34, 0)
 
-// The interpolated frame is computed right after submission. Past this wait,
-// the frame is shown without it.
-#define OUTPUT_TIMEOUT_US 8000
-
 // Consecutive failures after which AMF is abandoned for this session
 #define MAX_FAILURES 30
 
@@ -45,6 +41,7 @@ struct D3D11AmfFrc::Impl
     ComPtr<ID3D11ShaderResourceView> outputView;
 
     int consecutiveFailures = 0;
+    LARGE_INTEGER submitTime = {};
     uint64_t interpolatedFrames = 0;
     uint64_t missedFrames = 0;
     uint64_t totalWaitUs = 0;
@@ -258,7 +255,7 @@ D3D11AmfFrc::D3D11AmfFrc() :
 D3D11AmfFrc::~D3D11AmfFrc() = default;
 
 bool D3D11AmfFrc::initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                             DXGI_FORMAT format, int width, int height)
+                             DXGI_FORMAT format, int width, int height, bool fastSearch)
 {
     m->device = device;
     m->deviceContext = context;
@@ -331,7 +328,7 @@ bool D3D11AmfFrc::initialize(ID3D11Device* device, ID3D11DeviceContext* context,
     m->frc->SetProperty(AMF_FRC_ENABLE_FALLBACK, false);
     m->frc->SetProperty(AMF_FRC_INDICATOR, false);
     m->frc->SetProperty(AMF_FRC_PROFILE, (amf_int64)FRC_PROFILE_HIGH);
-    m->frc->SetProperty(AMF_FRC_MV_SEARCH_MODE, (amf_int64)FRC_MV_SEARCH_NATIVE);
+    m->frc->SetProperty(AMF_FRC_MV_SEARCH_MODE, (amf_int64)(fastSearch ? FRC_MV_SEARCH_PERFORMANCE : FRC_MV_SEARCH_NATIVE));
 
     amf::AMF_SURFACE_FORMAT surfaceFormat;
     switch (format) {
@@ -380,11 +377,12 @@ bool D3D11AmfFrc::initialize(ID3D11Device* device, ID3D11DeviceContext* context,
     }
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "AMF FRC: ready for %dx%d frames", width, height);
+                "AMF FRC: ready for %dx%d frames, %s motion search",
+                width, height, fastSearch ? "fast" : "full resolution");
     return true;
 }
 
-ID3D11ShaderResourceView* D3D11AmfFrc::interpolate(ID3D11Texture2D* frame)
+bool D3D11AmfFrc::submit(ID3D11Texture2D* frame)
 {
     ID3D11Texture2D* input = m->copyToNextInput(frame);
 
@@ -394,20 +392,25 @@ ID3D11ShaderResourceView* D3D11AmfFrc::interpolate(ID3D11Texture2D* frame)
                     "AMF FRC: SubmitInput() failed: %d", res);
         m->consecutiveFailures++;
         m->primed = false;
-        return nullptr;
+        return false;
     }
 
     bool hadPrevious = m->primed;
     m->primed = true;
     if (!hadPrevious) {
         m->drainOutputs();
-        return nullptr;
+        return false;
     }
 
-    LARGE_INTEGER frequency, start, end;
+    QueryPerformanceCounter(&m->submitTime);
+    return true;
+}
+
+ID3D11ShaderResourceView* D3D11AmfFrc::collect(uint64_t timeoutUs)
+{
+    LARGE_INTEGER frequency, end;
     QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&start);
-    amf::AMFSurfacePtr result = m->queryOutput(OUTPUT_TIMEOUT_US);
+    amf::AMFSurfacePtr result = m->queryOutput(timeoutUs);
     QueryPerformanceCounter(&end);
 
     if (result == nullptr || !m->copyOutput(result)) {
@@ -416,7 +419,8 @@ ID3D11ShaderResourceView* D3D11AmfFrc::interpolate(ID3D11Texture2D* frame)
         return nullptr;
     }
 
-    m->totalWaitUs += (end.QuadPart - start.QuadPart) * 1000000 / frequency.QuadPart;
+    // From the submission, so it includes the GPU work queued before collect()
+    m->totalWaitUs += (end.QuadPart - m->submitTime.QuadPart) * 1000000 / frequency.QuadPart;
     m->interpolatedFrames++;
     m->consecutiveFailures = 0;
     return m->outputView.Get();
@@ -425,6 +429,16 @@ ID3D11ShaderResourceView* D3D11AmfFrc::interpolate(ID3D11Texture2D* frame)
 bool D3D11AmfFrc::hasFailed() const
 {
     return m->consecutiveFailures >= MAX_FAILURES;
+}
+
+double D3D11AmfFrc::averageWaitUs() const
+{
+    return m->interpolatedFrames ? (double)m->totalWaitUs / m->interpolatedFrames : 0.0;
+}
+
+uint64_t D3D11AmfFrc::interpolatedFrames() const
+{
+    return m->interpolatedFrames;
 }
 
 void D3D11AmfFrc::reset()
