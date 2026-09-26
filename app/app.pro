@@ -5,7 +5,7 @@ unix:!macx {
     TARGET = moonlight
 } else {
     # On macOS, this is the name displayed in the global menu bar
-    TARGET = Moonlight
+    TARGET = KanePlay
 }
 
 include(../globaldefs.pri)
@@ -193,6 +193,7 @@ SOURCES += \
     streaming/input/reltouch.cpp \
     streaming/session.cpp \
     streaming/streamhealth.cpp \
+    streaming/ingamemenu.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
     gui/computermodel.cpp \
@@ -203,6 +204,7 @@ SOURCES += \
     path.cpp \
     settings/mappingmanager.cpp \
     gui/sdlgamepadkeynavigation.cpp \
+    gui/uisound.cpp \
     streaming/video/overlaymanager.cpp \
     streaming/vrrratepolicy.cpp \
     backend/systemproperties.cpp \
@@ -232,6 +234,7 @@ HEADERS += \
     streaming/input/input.h \
     streaming/session.h \
     streaming/streamhealth.h \
+    streaming/ingamemenu.h \
     streaming/audio/renderers/renderer.h \
     streaming/audio/renderers/sdl.h \
     gui/computermodel.h \
@@ -244,6 +247,7 @@ HEADERS += \
     path.h \
     settings/mappingmanager.h \
     gui/sdlgamepadkeynavigation.h \
+    gui/uisound.h \
     streaming/video/overlaymanager.h \
     backend/systemproperties.h
 
@@ -406,16 +410,21 @@ win32 {
 win32:!winrt {
     message(DXVA2 and D3D11VA renderers selected)
 
+    # AMD AMF headers, for the driver's frame rate conversion
+    INCLUDEPATH += $$PWD/../third_party/AMF/include
+
     SOURCES += \
         streaming/video/ffmpeg-renderers/dxva2.cpp \
         streaming/video/ffmpeg-renderers/d3d11va.cpp \
         streaming/video/ffmpeg-renderers/d3d11frameinterpolator.cpp \
+        streaming/video/ffmpeg-renderers/d3d11amffrc.cpp \
         streaming/video/ffmpeg-renderers/pacer/dxvsyncsource.cpp
 
     HEADERS += \
         streaming/video/ffmpeg-renderers/dxva2.h \
         streaming/video/ffmpeg-renderers/d3d11va.h \
         streaming/video/ffmpeg-renderers/d3d11frameinterpolator.h \
+        streaming/video/ffmpeg-renderers/d3d11amffrc.h \
         streaming/video/ffmpeg-renderers/pacer/dxvsyncsource.h
 }
 macx {
@@ -550,7 +559,7 @@ unix:!macx: {
     desktop.files = deploy/linux/com.moonlight_stream.Moonlight.desktop
     desktop.path = $$PREFIX/$$DATADIR/applications/
 
-    icons.files = res/moonlight.svg
+    icons.files = res/kaneplay.svg
     icons.path = $$PREFIX/$$DATADIR/icons/hicolor/scalable/apps/
 
     appstream.files = deploy/linux/com.moonlight_stream.Moonlight.appdata.xml
@@ -559,13 +568,13 @@ unix:!macx: {
     INSTALLS += target desktop icons appstream
 }
 win32 {
-    RC_ICONS = moonlight.ico
-    QMAKE_TARGET_COMPANY = Moonlight Game Streaming Project
-    QMAKE_TARGET_DESCRIPTION = Moonlight Game Streaming Client
-    QMAKE_TARGET_PRODUCT = Moonlight
+    RC_ICONS = kaneplay.ico
+    QMAKE_TARGET_COMPANY = KanePlay
+    QMAKE_TARGET_DESCRIPTION = KanePlay game streaming client
+    QMAKE_TARGET_PRODUCT = KanePlay
 
     CONFIG -= embed_manifest_exe
-    QMAKE_LFLAGS += /MANIFEST:embed /MANIFESTINPUT:$${PWD}/Moonlight.exe.manifest
+    QMAKE_LFLAGS += /MANIFEST:embed /MANIFESTINPUT:$${PWD}/KanePlay.exe.manifest
 }
 macx {
     # Create Info.plist in object dir with the correct version string
@@ -592,5 +601,10 @@ macx {
     }
 }
 
-VERSION = "$$cat(version.txt)"
-DEFINES += VERSION_STR=\\\"$$cat(version.txt)\\\"
+# build-arch.bat stamps every build with a build number (4th field), so the
+# private update channel can tell builds of the same upstream version apart
+ML_VERSION = $$cat(version.txt)
+ML_BUILD_NUMBER = $$(ML_BUILD_NUMBER)
+!isEmpty(ML_BUILD_NUMBER): ML_VERSION = $${ML_VERSION}.$${ML_BUILD_NUMBER}
+VERSION = "$$ML_VERSION"
+DEFINES += VERSION_STR=\\\"$$ML_VERSION\\\"

@@ -5,6 +5,12 @@ rem Run from Qt command prompt with working directory set to root of repo
 
 set BUILD_CONFIG=%1
 
+rem "x64" as the second parameter builds a bundle without ARM64, with the
+rem Visual C++ redistributable embedded so it installs offline
+if /I "%2"=="x64" (
+    set X64_ONLY=1
+)
+
 rem Convert to lower case for windeployqt
 if /I "%BUILD_CONFIG%"=="debug" (
     set BUILD_CONFIG=debug
@@ -47,12 +53,12 @@ if defined CI_VERSION (
 )
 
 rem Ensure that all architectures have been built before the final bundle
-if not exist "%BUILD_ROOT%\build-x64-%BUILD_CONFIG%\Moonlight.msi" (
+if not exist "%BUILD_ROOT%\build-x64-%BUILD_CONFIG%\KanePlay.msi" (
     echo Unable to build bundle - missing binaries for %BUILD_CONFIG% x64
     echo You must run 'build-arch.bat %BUILD_CONFIG% x64' first
     exit /b 1
 )
-if not exist "%BUILD_ROOT%\build-arm64-%BUILD_CONFIG%\Moonlight.msi" (
+if not defined X64_ONLY if not exist "%BUILD_ROOT%\build-arm64-%BUILD_CONFIG%\KanePlay.msi" (
     echo Unable to build bundle - missing binaries for %BUILD_CONFIG% arm64
     echo You must run 'build-arch.bat %BUILD_CONFIG% arm64' first
     exit /b 1
@@ -72,15 +78,28 @@ for /f "usebackq delims=" %%i in (`%VSWHERE% -latest -property installationPath`
 )
 if !ERRORLEVEL! NEQ 0 goto Error
 
+if defined X64_ONLY (
+    set VCREDIST_X64_PATH=!VCToolsRedistDir!vc_redist.x64.exe
+    if not exist "!VCREDIST_X64_PATH!" (
+        echo Unable to find !VCREDIST_X64_PATH!
+        goto Error
+    )
+
+    rem major.minor.<days since 2026>.<minute of the day>, so that each build
+    rem replaces the previous one (installer version fields stop at 65535)
+    for /f %%i in ('powershell -NoProfile -Command "[string]::Format('{0}.{1}.{2}.{3}', '%VERSION%'.Split('.')[0], '%VERSION%'.Split('.')[1], [math]::Floor(((Get-Date) - (Get-Date '2026-01-01')).TotalDays), (Get-Date).Hour * 60 + (Get-Date).Minute)"') do set BUNDLE_VERSION=%%i
+    echo Bundle version !BUNDLE_VERSION!
+)
+
 echo Building bundle
 rem Bundles are always x86 binaries
-cmd /c "set VERSION= && msbuild -Restore %SOURCE_ROOT%\wix\MoonlightSetup\MoonlightSetup.wixproj /p:Configuration=%BUILD_CONFIG% /p:Platform=x86 /p:MSBuildProjectExtensionsPath=%BUILD_FOLDER%\"
+cmd /c "set VERSION= && msbuild -Restore %SOURCE_ROOT%\wix\KanePlaySetup\KanePlaySetup.wixproj /p:Configuration=%BUILD_CONFIG% /p:Platform=x86 /p:MSBuildProjectExtensionsPath=%BUILD_FOLDER%\"
 if !ERRORLEVEL! NEQ 0 goto Error
 
 rem Rename the installer to match the publishing convention
-ren %INSTALLER_FOLDER%\MoonlightSetup.exe MoonlightSetup-%VERSION%.exe
+ren %INSTALLER_FOLDER%\KanePlaySetup.exe KanePlaySetup-%VERSION%.exe
 
-echo Build successful for Moonlight v%VERSION% installer!
+echo Build successful for KanePlay v%VERSION% installer!
 exit /b 0
 
 :Error

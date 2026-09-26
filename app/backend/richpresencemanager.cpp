@@ -2,16 +2,21 @@
 
 #include <QDebug>
 
+// Discord application of KanePlay, empty while there is none
+#define KANEPLAY_DISCORD_APP_ID ""
+
 RichPresenceManager::RichPresenceManager(StreamingPreferences& prefs, QString gameName)
     : m_DiscordActive(false)
 {
 #ifdef HAVE_DISCORD
-    if (prefs.richPresence) {
+    // KanePlay has no Discord application of its own yet, and Moonlight's
+    // must not be used, so the rich presence stays off until then
+    if (prefs.richPresence && sizeof(KANEPLAY_DISCORD_APP_ID) > 1) {
         DiscordEventHandlers handlers = {};
         handlers.ready = discordReady;
         handlers.disconnected = discordDisconnected;
         handlers.errored = discordErrored;
-        Discord_Initialize("594668102021677159", &handlers, 0, nullptr);
+        Discord_Initialize(KANEPLAY_DISCORD_APP_ID, &handlers, 0, nullptr);
         m_DiscordActive = true;
     }
 

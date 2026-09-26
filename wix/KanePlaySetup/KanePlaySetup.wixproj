@@ -12,6 +12,9 @@
   <PropertyGroup>
     <AcceptEula>wix7</AcceptEula>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(X64_ONLY)'!=''">
+    <DefineConstants>$(DefineConstants);X64Only;BundleVersion=$(BUNDLE_VERSION);VcRedistX64Path=$(VCREDIST_X64_PATH)</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup Condition="$(SIGN)!=''">
     <SignOutput>true</SignOutput>
   </PropertyGroup>

@@ -9,9 +9,12 @@
 #include <QNetworkProxyFactory>
 #include <QPalette>
 #include <QFont>
+#include <QFontDatabase>
 #include <QCursor>
 #include <QElapsedTimer>
 #include <QTemporaryFile>
+#include <QDir>
+#include <QFileInfo>
 #include <QRegularExpression>
 
 #ifdef Q_OS_UNIX
@@ -54,6 +57,7 @@
 #include "streaming/session.h"
 #include "settings/streamingpreferences.h"
 #include "gui/sdlgamepadkeynavigation.h"
+#include "gui/uisound.h"
 
 #if defined(Q_OS_WIN32)
 #define IS_UNSPECIFIED_HANDLE(x) ((x) == INVALID_HANDLE_VALUE || (x) == NULL)
@@ -285,7 +289,7 @@ LONG WINAPI UnhandledExceptionHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     }
 
     WCHAR dmpFileName[MAX_PATH];
-    swprintf_s(dmpFileName, L"%ls\\Moonlight-%I64u.dmp",
+    swprintf_s(dmpFileName, L"%ls\\KanePlay-%I64u.dmp",
                (PWCHAR)QDir::toNativeSeparators(Path::getLogDir()).utf16(), QDateTime::currentSecsSinceEpoch());
     QString qDmpFileName = QString::fromUtf16((const char16_t*)dmpFileName);
     HANDLE dumpHandle = CreateFileW(dmpFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -418,6 +422,68 @@ void configureSignalHandlers()
 
 #endif
 
+// KanePlay keeps its settings apart from Moonlight's, so both can be installed.
+// The first time it starts, it copies Moonlight's settings, paired PCs included,
+// leaving the originals in place.
+static void importMoonlightSettings()
+{
+    QSettings settings;
+    if (!settings.allKeys().isEmpty()) {
+        return;
+    }
+
+    QSettings moonlightSettings(settings.format(), QSettings::UserScope,
+                                "Moonlight Game Streaming Project", "Moonlight");
+    moonlightSettings.setFallbacksEnabled(false);
+    const QStringList keys = moonlightSettings.allKeys();
+    if (keys.isEmpty()) {
+        return;
+    }
+
+    for (const QString& key : keys) {
+        settings.setValue(key, moonlightSettings.value(key));
+    }
+    settings.setValue("importedfrommoonlight", true);
+    settings.sync();
+
+    qInfo() << "Imported" << keys.size() << "settings from Moonlight";
+}
+
+// Portable mode keeps the settings, including pairing, in the folder holding
+// portable.dat. Launchers and shortcuts often start Moonlight from another
+// working directory, so look next to the executable too. If that folder can't
+// be written (Program Files), pairing would be lost at every launch, so the
+// standard settings location is used instead.
+static bool usePortableMode()
+{
+    QStringList candidates { QDir::currentPath() };
+
+#ifdef Q_OS_WIN32
+    wchar_t exePath[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    if (length > 0 && length < MAX_PATH) {
+        candidates << QFileInfo(QString::fromWCharArray(exePath, length)).absolutePath();
+    }
+#endif
+
+    for (const QString& dir : candidates) {
+        if (!QFile(dir + "/portable.dat").exists()) {
+            continue;
+        }
+
+        QTemporaryFile probe(dir + "/portable-XXXXXX.tmp");
+        if (!probe.open()) {
+            qWarning() << "portable.dat found in" << dir << "but this folder is read-only, using the standard settings location";
+            return false;
+        }
+
+        QDir::setCurrent(dir);
+        return true;
+    }
+
+    return false;
+}
+
 int main(int argc, char *argv[])
 {
     SDL_SetMainReady();
@@ -428,11 +494,11 @@ int main(int argc, char *argv[])
     // Set these here to allow us to use the default QSettings constructor.
     // These also ensure that our cache directory is named correctly. As such,
     // it is critical that these be called before Path::initialize().
-    QCoreApplication::setOrganizationName("Moonlight Game Streaming Project");
-    QCoreApplication::setOrganizationDomain("moonlight-stream.com");
-    QCoreApplication::setApplicationName("Moonlight");
+    QCoreApplication::setOrganizationName("KanePlay");
+    QCoreApplication::setOrganizationDomain("kaneplay.app");
+    QCoreApplication::setApplicationName("KanePlay");
 
-    if (QFile(QDir::currentPath() + "/portable.dat").exists()) {
+    if (usePortableMode()) {
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::currentPath());
         QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, QDir::currentPath());
@@ -444,6 +510,9 @@ int main(int argc, char *argv[])
         // Initialize paths for standard installation
         Path::initialize(false);
     }
+
+    // Moonlight users keep their paired PCs and settings
+    importMoonlightSettings();
 
     // Override the default QML cache directory with the one we chose
     if (qEnvironmentVariableIsEmpty("QML_DISK_CACHE_PATH")) {
@@ -464,7 +533,7 @@ int main(int argc, char *argv[])
     if (IS_UNSPECIFIED_HANDLE(oldConErr))
 #endif
     {
-        s_LoggerFile = new QFile(tempDir.filePath(QString("Moonlight-%1.log").arg(QDateTime::currentSecsSinceEpoch())));
+        s_LoggerFile = new QFile(tempDir.filePath(QString("KanePlay-%1.log").arg(QDateTime::currentSecsSinceEpoch())));
         if (s_LoggerFile->open(QIODevice::WriteOnly | QIODevice::Text)) {
             QTextStream(stderr) << "Redirecting log output to " << s_LoggerFile->fileName() << Qt::endl;
             s_LoggerStream.setDevice(s_LoggerFile);
@@ -497,7 +566,7 @@ int main(int argc, char *argv[])
 
 #ifdef LOG_TO_FILE
     // Prune the oldest existing logs if there are more than 10
-    QStringList existingLogNames = tempDir.entryList(QStringList("Moonlight-*.log"), QDir::NoFilter, QDir::SortFlag::Time);
+    QStringList existingLogNames = tempDir.entryList(QStringList("KanePlay-*.log"), QDir::NoFilter, QDir::SortFlag::Time);
     for (int i = 10; i < existingLogNames.size(); i++) {
         qInfo() << "Removing old log file:" << existingLogNames.at(i);
         QFile(tempDir.filePath(existingLogNames.at(i))).remove();
@@ -715,8 +784,8 @@ int main(int argc, char *argv[])
     // Set our app name for SDL to use with PulseAudio and PipeWire. This matches what we
     // provide as our app name to libsoundio too. On SDL 2.0.18+, SDL_APP_NAME is also used
     // for screensaver inhibitor reporting.
-    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_APP_NAME, "Moonlight");
-    SDL_SetHint(SDL_HINT_APP_NAME, "Moonlight");
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_APP_NAME, "KanePlay");
+    SDL_SetHint(SDL_HINT_APP_NAME, "KanePlay");
 
     // SDL will try to lock the mouse cursor on Wayland if it's not visible in order to
     // support applications that assume they can warp the cursor (which isn't possible
@@ -922,13 +991,20 @@ int main(int argc, char *argv[])
 #ifndef Q_OS_DARWIN
     // Set the window icon except on macOS where we want to keep the
     // modified macOS 11 style rounded corner icon.
-    app.setWindowIcon(QIcon(":/res/moonlight.svg"));
+    app.setWindowIcon(QIcon(":/res/kaneplay.svg"));
 #endif
 
     // This is necessary to show our icon correctly on Wayland
     app.setDesktopFileName("com.moonlight_stream.Moonlight");
     qputenv("SDL_VIDEO_WAYLAND_WMCLASS", "com.moonlight_stream.Moonlight");
     qputenv("SDL_VIDEO_X11_WMCLASS", "com.moonlight_stream.Moonlight");
+
+    // The UI typefaces ship with the app (SIL Open Font License, see res/fonts)
+    for (const char* font : { ":/res/fonts/Manrope.ttf", ":/res/fonts/Unbounded.ttf" }) {
+        if (QFontDatabase::addApplicationFont(font) < 0) {
+            qWarning() << "Unable to load font" << font;
+        }
+    }
 
     // Register our C++ types for QML
     qmlRegisterType<ComputerModel>("ComputerModel", 1, 0, "ComputerModel");
@@ -954,6 +1030,11 @@ int main(int argc, char *argv[])
                                                       [](QQmlEngine* qmlEngine, QJSEngine*) -> QObject* {
                                                           return new SdlGamepadKeyNavigation(StreamingPreferences::get(qmlEngine));
                                                       });
+    qmlRegisterSingletonType<UiSound>("UiSound", 1, 0,
+                                      "UiSound",
+                                      [](QQmlEngine* qmlEngine, QJSEngine*) -> QObject* {
+                                          return new UiSound(StreamingPreferences::get(qmlEngine));
+                                      });
     qmlRegisterSingletonType<StreamingPreferences>("StreamingPreferences", 1, 0,
                                                    "StreamingPreferences",
                                                    [](QQmlEngine* qmlEngine, QJSEngine*) -> QObject* {
@@ -965,6 +1046,11 @@ int main(int argc, char *argv[])
 
     // We require the Material theme
     QQuickStyle::setStyle("Material");
+
+    // The UI is always dark, so ask for dark window decorations (title bar)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+#endif
 
     // Our icons are styled for a dark theme, so we do not allow the user to override this
     qputenv("QT_QUICK_CONTROLS_MATERIAL_THEME", "Dark");
