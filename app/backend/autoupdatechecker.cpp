@@ -4,9 +4,27 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QDir>
+#include <QProcess>
+#include <QCoreApplication>
+#include <QScopeGuard>
+
+#ifdef Q_OS_WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#endif
+
+// Update channel: the manifest attached to the latest GitHub release. It can be
+// overridden with the updateChannelUrl setting.
+#define DEFAULT_UPDATE_CHANNEL_URL "https://github.com/Kaynegiordano/KanePlay/releases/latest/download/update.json"
 
 AutoUpdateChecker::AutoUpdateChecker(QObject *parent) :
-    QObject(parent)
+    QObject(parent),
+    m_DownloadNam(nullptr),
+    m_DownloadReply(nullptr),
+    m_InstallerHash(QCryptographicHash::Sha256)
 {
     m_Nam = new QNetworkAccessManager(this);
 
@@ -20,7 +38,7 @@ AutoUpdateChecker::AutoUpdateChecker(QObject *parent) :
             this, &AutoUpdateChecker::handleUpdateCheckRequestFinished);
 
     QString currentVersion(VERSION_STR);
-    qDebug() << "Current Moonlight version:" << currentVersion;
+    qDebug() << "Current KanePlay version:" << currentVersion;
     parseStringToVersionQuad(currentVersion, m_CurrentVersionQuad);
 
     // Should at least have a 1.0-style version number
@@ -30,8 +48,12 @@ AutoUpdateChecker::AutoUpdateChecker(QObject *parent) :
 void AutoUpdateChecker::start()
 {
     if (!m_Nam) {
-        Q_ASSERT(m_Nam);
-        return;
+        // Checking again, the previous check deleted its network manager
+        m_Nam = new QNetworkAccessManager(this);
+        m_Nam->setStrictTransportSecurityEnabled(true);
+        m_Nam->setRedirectPolicy(QNetworkRequest::NoLessSafeRedirectPolicy);
+        connect(m_Nam, &QNetworkAccessManager::finished,
+                this, &AutoUpdateChecker::handleUpdateCheckRequestFinished);
     }
 
 #if defined(Q_OS_WIN32) || defined(Q_OS_DARWIN) || defined(STEAM_LINK) || defined(APP_IMAGE) // Only run update checker on platforms without auto-update
@@ -44,8 +66,13 @@ void AutoUpdateChecker::start()
 #endif
 
     // We'll get a callback when this is finished
-    QUrl url("https://moonlight-stream.org/updates/qt.json");
-    QNetworkRequest request(url);
+    m_ChannelUrl = QUrl(QSettings().value("updateChannelUrl", DEFAULT_UPDATE_CHANNEL_URL).toString());
+    qInfo() << "Checking for updates on" << m_ChannelUrl.toString();
+    QNetworkRequest request(m_ChannelUrl);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    // The host may be off or out of reach
+    request.setTransferTimeout(10000);
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
 #else
@@ -113,6 +140,11 @@ void AutoUpdateChecker::handleUpdateCheckRequestFinished(QNetworkReply* reply)
     m_Nam->deleteLater();
     m_Nam = nullptr;
 
+    // Tell the UI how the check went, whichever way we leave
+    bool updateAvailable = false;
+    bool failed = true;
+    auto reportResult = qScopeGuard([&] { emit updateCheckFinished(updateAvailable, failed); });
+
     if (reply->error() == QNetworkReply::NoError) {
         QTextStream stream(reply);
 
@@ -138,6 +170,8 @@ void AutoUpdateChecker::handleUpdateCheckRequestFinished(QNetworkReply* reply)
             qWarning() << "Update manifest doesn't contain an array";
             return;
         }
+
+        failed = false;
 
         for (const auto& updateEntry : std::as_const(array)) {
             if (updateEntry.isObject()) {
@@ -180,7 +214,7 @@ void AutoUpdateChecker::handleUpdateCheckRequestFinished(QNetworkReply* reply)
                     qDebug() << "Found update manifest match for current platform";
 
                     QString latestVersion = updateObj["version"].toString();
-                    qDebug() << "Latest version of Moonlight for this platform is:" << latestVersion;
+                    qDebug() << "Latest version of KanePlay for this platform is:" << latestVersion;
 
                     QVector<int> latestVersionQuad;
                     parseStringToVersionQuad(latestVersion, latestVersionQuad);
@@ -189,8 +223,20 @@ void AutoUpdateChecker::handleUpdateCheckRequestFinished(QNetworkReply* reply)
                     if (res < 0) {
                         // m_CurrentVersionQuad < latestVersionQuad
                         qDebug() << "Update available";
-                        emit onUpdateAvailable(updateObj["version"].toString(),
-                                               updateObj["browser_url"].toString());
+
+                        // URLs of the private channel are relative to the manifest
+                        m_UpdateVersion = latestVersion;
+                        if (updateObj["installer_url"].isString() && updateObj["sha256"].isString()) {
+                            m_InstallerUrl = m_ChannelUrl.resolved(QUrl(updateObj["installer_url"].toString()));
+                            m_InstallerSha256 = QByteArray::fromHex(updateObj["sha256"].toString().toLatin1());
+                        }
+                        if (updateObj["notes"].isString()) {
+                            emit updateNotesAvailable(updateObj["notes"].toString());
+                        }
+
+                        updateAvailable = true;
+                        emit onUpdateAvailable(latestVersion,
+                                               m_ChannelUrl.resolved(QUrl(updateObj["browser_url"].toString())).toString());
                         return;
                     }
                     else if (res > 0) {
@@ -215,4 +261,140 @@ void AutoUpdateChecker::handleUpdateCheckRequestFinished(QNetworkReply* reply)
         qWarning() << "Update checking failed with error:" << reply->error();
         reply->deleteLater();
     }
+}
+
+bool AutoUpdateChecker::canInstallUpdate()
+{
+#ifdef Q_OS_WIN32
+    return m_InstallerUrl.isValid() && m_InstallerSha256.size() == 32;
+#else
+    return false;
+#endif
+}
+
+void AutoUpdateChecker::installUpdate()
+{
+    if (!canInstallUpdate() || m_DownloadReply != nullptr) {
+        return;
+    }
+
+    QDir dir(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
+    dir.mkpath("KanePlay-Update");
+    dir.cd("KanePlay-Update");
+
+    m_InstallerFile.setFileName(dir.filePath(QString("KanePlaySetup-%1.exe").arg(m_UpdateVersion)));
+    if (!m_InstallerFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        emit updateDownloadFailed(m_InstallerFile.errorString());
+        return;
+    }
+    m_InstallerHash.reset();
+
+    if (m_DownloadNam == nullptr) {
+        m_DownloadNam = new QNetworkAccessManager(this);
+        m_DownloadNam->setStrictTransportSecurityEnabled(true);
+        m_DownloadNam->setRedirectPolicy(QNetworkRequest::NoLessSafeRedirectPolicy);
+    }
+
+    qInfo() << "Downloading update from" << m_InstallerUrl.toString();
+    QNetworkRequest request(m_InstallerUrl);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    // Aborts if no data arrives for this long, not after the whole download
+    request.setTransferTimeout(30000);
+#endif
+    m_DownloadReply = m_DownloadNam->get(request);
+
+    connect(m_DownloadReply, &QNetworkReply::readyRead, this, [this]() {
+        QByteArray data = m_DownloadReply->readAll();
+        m_InstallerHash.addData(data);
+        m_InstallerFile.write(data);
+    });
+    connect(m_DownloadReply, &QNetworkReply::downloadProgress,
+            this, &AutoUpdateChecker::updateDownloadProgress);
+    connect(m_DownloadReply, &QNetworkReply::finished,
+            this, &AutoUpdateChecker::handleInstallerDownloadFinished);
+}
+
+void AutoUpdateChecker::cancelUpdate()
+{
+    if (m_DownloadReply != nullptr) {
+        // finished() will clean up
+        m_DownloadReply->abort();
+    }
+}
+
+void AutoUpdateChecker::handleInstallerDownloadFinished()
+{
+    QNetworkReply* reply = m_DownloadReply;
+    m_DownloadReply = nullptr;
+    reply->deleteLater();
+
+    if (reply->error() == QNetworkReply::NoError) {
+        QByteArray data = reply->readAll();
+        m_InstallerHash.addData(data);
+        m_InstallerFile.write(data);
+    }
+    bool writeOk = m_InstallerFile.error() == QFileDevice::NoError;
+    m_InstallerFile.close();
+
+    if (reply->error() == QNetworkReply::OperationCanceledError) {
+        m_InstallerFile.remove();
+        return;
+    }
+    else if (reply->error() != QNetworkReply::NoError) {
+        qWarning() << "Update download failed:" << reply->errorString();
+        m_InstallerFile.remove();
+        emit updateDownloadFailed(reply->errorString());
+        return;
+    }
+    else if (!writeOk) {
+        m_InstallerFile.remove();
+        emit updateDownloadFailed(m_InstallerFile.errorString());
+        return;
+    }
+    else if (m_InstallerHash.result() != m_InstallerSha256) {
+        qWarning() << "Update installer hash mismatch:" << m_InstallerHash.result().toHex();
+        m_InstallerFile.remove();
+        emit updateDownloadFailed(tr("The downloaded file is corrupted (SHA-256 mismatch)."));
+        return;
+    }
+
+    launchInstaller();
+}
+
+void AutoUpdateChecker::launchInstaller()
+{
+#ifdef Q_OS_WIN32
+    QString setupPath = QDir::toNativeSeparators(m_InstallerFile.fileName());
+    QString exePath = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+
+    // The installer can only replace KanePlay once it has exited, and the
+    // script relaunches it whether the install went through or was cancelled
+    QFile script(QFileInfo(m_InstallerFile).dir().filePath("installer.cmd"));
+    if (!script.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        emit updateDownloadFailed(script.errorString());
+        return;
+    }
+    script.write(QString("@echo off\r\n"
+                         "chcp 65001 >nul\r\n"
+                         "ping -n 3 127.0.0.1 >nul\r\n"
+                         "start \"\" /wait \"%1\" /passive /norestart\r\n"
+                         "del \"%1\"\r\n"
+                         "start \"\" \"%2\"\r\n")
+                 .arg(setupPath, exePath).toUtf8());
+    script.close();
+
+    QProcess process;
+    process.setProgram("cmd.exe");
+    process.setArguments({ "/c", QDir::toNativeSeparators(script.fileName()) });
+    process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args) {
+        args->flags |= CREATE_NO_WINDOW;
+    });
+    if (!process.startDetached()) {
+        emit updateDownloadFailed(process.errorString());
+        return;
+    }
+
+    qInfo() << "Update installer started, quitting";
+    emit updateInstallerStarted();
+#endif
 }
