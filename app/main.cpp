@@ -484,9 +484,81 @@ static bool usePortableMode()
     return false;
 }
 
+#ifdef Q_OS_WIN32
+static BOOL CALLBACK activateKanePlayWindow(HWND window, LPARAM found)
+{
+    wchar_t title[16];
+    if (GetWindowTextW(window, title, ARRAYSIZE(title)) == 0 || wcscmp(title, L"KanePlay") != 0) {
+        return TRUE;
+    }
+
+    // Only a window of another KanePlay.exe, not a folder named KanePlay
+    DWORD processId = 0;
+    GetWindowThreadProcessId(window, &processId);
+    if (processId == GetCurrentProcessId()) {
+        return TRUE;
+    }
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (process == nullptr) {
+        return TRUE;
+    }
+    wchar_t path[MAX_PATH];
+    DWORD length = ARRAYSIZE(path);
+    bool isKanePlay = QueryFullProcessImageNameW(process, 0, path, &length) &&
+            QString::fromWCharArray(path, length).endsWith("\\KanePlay.exe", Qt::CaseInsensitive);
+    CloseHandle(process);
+    if (!isKanePlay) {
+        return TRUE;
+    }
+
+    if (IsIconic(window)) {
+        ShowWindow(window, SW_RESTORE);
+    }
+    SetForegroundWindow(window);
+    *(bool*)found = true;
+    return FALSE;
+}
+
+// Two KanePlay windows at once both follow the gamepad: one can launch or quit
+// games on the host behind the other's back. This can happen when the updater
+// and the installer both start KanePlay, or with a double tap on its icon. A
+// second KanePlay started without arguments brings the first one forward and
+// quits. Command line streams are left alone.
+static bool isAnotherKanePlayRunning(HANDLE& instanceMutex)
+{
+    instanceMutex = CreateMutexW(nullptr, TRUE, L"Local\\KanePlay.SingleInstance");
+    if (instanceMutex == nullptr || GetLastError() != ERROR_ALREADY_EXISTS) {
+        return false;
+    }
+
+    bool found = false;
+    EnumWindows(activateKanePlayWindow, (LPARAM)&found);
+    if (found) {
+        return true;
+    }
+
+    // No window: the other one is starting or exiting (for example the updater
+    // that just started this one). Wait for it a little.
+    DWORD result = WaitForSingleObject(instanceMutex, 5000);
+    if (result == WAIT_OBJECT_0 || result == WAIT_ABANDONED) {
+        return false;
+    }
+    EnumWindows(activateKanePlayWindow, (LPARAM)&found);
+    return true;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     SDL_SetMainReady();
+
+#ifdef Q_OS_WIN32
+    // Held until KanePlay exits (see isAnotherKanePlayRunning())
+    HANDLE instanceMutex = nullptr;
+    if (argc <= 1 && isAnotherKanePlayRunning(instanceMutex)) {
+        return 0;
+    }
+#endif
 
     // Set the app version for the QCommandLineParser's showVersion() command
     QCoreApplication::setApplicationVersion(VERSION_STR);
