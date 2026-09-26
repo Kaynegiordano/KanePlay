@@ -789,6 +789,10 @@ bool D3D11VARenderer::initializeFrameInterpolation()
         refreshCount = stats.PresentRefreshCount;
         return true;
     };
+    callbacks.duplicateDecodedForTest = [] {
+        Session* session = Session::get();
+        return session != nullptr && session->isFrameInterpolationDuplicateTest();
+    };
 
     auto presenter = std::make_unique<D3D11FiPresenter>();
     if (!presenter->initialize(m_RenderDevice.Get(), m_RenderDeviceContext.Get(), swapChainDesc.Format,

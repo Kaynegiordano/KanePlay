@@ -48,6 +48,8 @@ bool D3D11FiPresenter::initialize(ID3D11Device5* device, ID3D11DeviceContext4* c
     m_Format = format;
     m_Callbacks = callbacks;
     m_Timed = timed;
+    const char* duplicateDecoded = SDL_getenv("KANEPLAY_FI_TEST_DUPLICATE");
+    m_DuplicateDecodedForTest = duplicateDecoded != nullptr && SDL_strcmp(duplicateDecoded, "1") == 0;
     m_SyncInterval = timed ? 0 : 1;
     m_PresentFlags = timed && allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
     m_NominalPeriodUs = m_PeriodUs = 1000000.0 / SDL_max(streamFps, 1);
@@ -72,6 +74,10 @@ bool D3D11FiPresenter::initialize(ID3D11Device5* device, ID3D11DeviceContext4* c
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Frame interpolation: %s presentation on its own thread",
                 timed ? "timed (tearing)" : "queued (V-sync)");
+    if (m_DuplicateDecodedForTest) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Frame interpolation diagnostic: presenting each decoded frame twice");
+    }
     return true;
 }
 
@@ -326,7 +332,11 @@ bool D3D11FiPresenter::presentSlot(Slot& slot, bool interpolated)
 {
     m_Callbacks.lock();
     uint64_t presentUs = LiGetMicroseconds();
-    HRESULT hr = m_Callbacks.present(interpolated ? slot.interpolatedView.Get() : slot.decodedView.Get(),
+    const bool duplicateDecoded = m_DuplicateDecodedForTest ||
+        (m_Callbacks.duplicateDecodedForTest && m_Callbacks.duplicateDecodedForTest());
+    ID3D11ShaderResourceView* view = interpolated && !duplicateDecoded
+        ? slot.interpolatedView.Get() : slot.decodedView.Get();
+    HRESULT hr = m_Callbacks.present(view,
                                      slot.width, slot.height, m_SyncInterval, m_PresentFlags);
     uint64_t presentedUs = LiGetMicroseconds();
     if (SUCCEEDED(hr)) {

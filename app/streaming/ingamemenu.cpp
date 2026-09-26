@@ -15,7 +15,7 @@ void InGameMenu::rebuild()
     m_Actions.clear();
     m_Actions << ActionResume << ActionStats;
     if (m_Session->hasFrameInterpolation()) {
-        m_Actions << ActionFrameGen;
+        m_Actions << ActionFrameGen << ActionFrameGenDuplicateTest;
     }
     if (m_Session->canToggleGamepadMouse()) {
         m_Actions << ActionMouseMode;
@@ -52,6 +52,11 @@ void InGameMenu::render()
             item.label = QCoreApplication::translate("InGameMenu", "Frame doubler ×2");
             item.isToggle = true;
             item.toggleOn = !m_Session->isFrameInterpolationPaused();
+            break;
+        case ActionFrameGenDuplicateTest:
+            item.label = QCoreApplication::translate("InGameMenu", "Duplicate decoded frames (test)");
+            item.isToggle = true;
+            item.toggleOn = m_Session->isFrameInterpolationDuplicateTest();
             break;
         case ActionMouseMode:
             item.label = QCoreApplication::translate("InGameMenu", "Mouse with the gamepad");
@@ -114,6 +119,12 @@ void InGameMenu::activate()
         break;
     case ActionFrameGen:
         m_Session->setFrameInterpolationPaused(!m_Session->isFrameInterpolationPaused());
+        render();
+        break;
+    case ActionFrameGenDuplicateTest:
+        m_Session->setFrameInterpolationDuplicateTest(!m_Session->isFrameInterpolationDuplicateTest());
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Frame interpolation diagnostic: duplicate decoded frames %s",
+                    m_Session->isFrameInterpolationDuplicateTest() ? "on" : "off");
         render();
         break;
     case ActionMouseMode:

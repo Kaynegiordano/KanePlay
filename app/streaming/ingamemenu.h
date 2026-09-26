@@ -30,6 +30,7 @@ private:
         ActionResume,
         ActionStats,
         ActionFrameGen,
+        ActionFrameGenDuplicateTest,
         ActionMouseMode,
         ActionCapture,
         ActionQuit

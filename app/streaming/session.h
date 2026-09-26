@@ -127,6 +127,8 @@ public:
     // The frame doubler can be paused from the in-game menu, the renderer checks it each frame
     bool isFrameInterpolationPaused() const { return m_FrameInterpolationPaused; }
     void setFrameInterpolationPaused(bool paused) { m_FrameInterpolationPaused = paused; }
+    bool isFrameInterpolationDuplicateTest() const { return m_FrameInterpolationDuplicateTest; }
+    void setFrameInterpolationDuplicateTest(bool duplicate) { m_FrameInterpolationDuplicateTest = duplicate; }
 
     // Asks the renderer to save a few decoded frames, to study frame interpolation
     void requestFrameCapture() { m_FrameCaptureRequested = true; }
@@ -339,6 +341,7 @@ private:
     bool m_BatterySaverActive;
     std::atomic<bool> m_FrameCaptureRequested { false };
     std::atomic<bool> m_FrameInterpolationPaused { false };
+    std::atomic<bool> m_FrameInterpolationDuplicateTest { false };
     InGameMenu m_InGameMenu;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;

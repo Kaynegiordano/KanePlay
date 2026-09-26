@@ -46,6 +46,8 @@ public:
         // The last present that reached the screen, and on which refresh
         // (IDXGISwapChain::GetFrameStatistics()), for the statistics
         std::function<bool(UINT& presentCount, UINT& refreshCount)> frameStatistics;
+        // Live diagnostic toggle: keep the presentation cadence but show decoded frames twice.
+        std::function<bool()> duplicateDecodedForTest;
     };
 
     // A frame to show: the interpolated frame (drawn to interpolatedTarget)
@@ -117,6 +119,8 @@ private:
     Callbacks m_Callbacks;
     // Switched off by the present thread if presents block (see checkBlockingPresent())
     std::atomic<bool> m_Timed { false };
+    // Diagnostic: present the decoded frame twice without changing the pacing.
+    bool m_DuplicateDecodedForTest = false;
     UINT m_SyncInterval = 1;
     UINT m_PresentFlags = 0;
 

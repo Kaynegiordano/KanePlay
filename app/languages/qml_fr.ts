@@ -609,6 +609,10 @@
         <translation>Doubleur ×2</translation>
     </message>
     <message>
+        <source>Duplicate decoded frames (test)</source>
+        <translation>Dupliquer les images décodées (test)</translation>
+    </message>
+    <message>
         <location line="+5"/>
         <source>Mouse with the gamepad</source>
         <translation>Souris avec la manette</translation>
