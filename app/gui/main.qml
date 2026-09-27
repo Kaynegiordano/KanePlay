@@ -110,7 +110,11 @@ ApplicationWindow {
     }
 
     // Keyboard and gamepad navigation ticks softly
-    onActiveFocusItemChanged: UiSound.focusMoved()
+    onActiveFocusItemChanged: {
+        if (!introLoader.active) {
+            UiSound.focusMoved()
+        }
+    }
 
     function findLibraryView() {
         return stackView.find(function(item, index) {
@@ -123,8 +127,8 @@ ApplicationWindow {
         SdlGamepadKeyNavigation.enable()
     }
 
-    Component.onCompleted: {
-        // Show the window according to the user's preferences
+    // Show the window according to the user's preferences
+    function showWindow() {
         if (SystemProperties.hasDesktopEnvironment) {
             if (StreamingPreferences.uiDisplayMode == StreamingPreferences.UI_MAXIMIZED) {
                 window.showMaximized()
@@ -137,6 +141,13 @@ ApplicationWindow {
             }
         } else {
             window.showFullScreen()
+        }
+    }
+
+    Component.onCompleted: {
+        // Once the intro is over, if it plays
+        if (!introLoader.active) {
+            showWindow()
         }
 
         // Display any modal dialogs for configuration warnings
@@ -650,5 +661,35 @@ ApplicationWindow {
 
     UpdateDialog {
         id: updateDialog
+    }
+
+    // The intro plays on its own, fullscreen, before KanePlay shows up, the way
+    // Steam's Big Picture opens. Not for launches that stream or pair straight away.
+    Loader {
+        id: introLoader
+        active: runConfigChecks && StreamingPreferences.startupIntro
+
+        sourceComponent: Window {
+            title: "KanePlay"
+            flags: Qt.FramelessWindowHint
+            color: "#090A0D"
+
+            // Gamepad buttons reach the focused window, this one for now
+            onActiveChanged: {
+                if (active) {
+                    SdlGamepadKeyNavigation.notifyWindowFocus(true)
+                }
+            }
+
+            StartupIntro {
+                anchors.fill: parent
+                onFinished: {
+                    window.showWindow()
+                    introLoader.active = false
+                }
+            }
+
+            Component.onCompleted: showFullScreen()
+        }
     }
 }

@@ -2244,6 +2244,14 @@
         <translation>Volume des sons de l’interface</translation>
     </message>
     <message>
+        <source>Startup intro</source>
+        <translation>Intro au démarrage</translation>
+    </message>
+    <message>
+        <source>Plays when KanePlay opens · any button skips it</source>
+        <translation>Jouée à l’ouverture de KanePlay · n’importe quel bouton la passe</translation>
+    </message>
+    <message>
         <location line="+3"/>
         <source>Needs interface sounds · A turns them on</source>
         <translation>Nécessite les sons de l’interface · A les active</translation>

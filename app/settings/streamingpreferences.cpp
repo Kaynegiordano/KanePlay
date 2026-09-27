@@ -38,6 +38,7 @@
 #define SER_BATTERYSAVER "batterysaver"
 #define SER_UISOUNDS "uisounds"
 #define SER_UISOUNDVOLUME "uisoundvolume"
+#define SER_STARTUPINTRO "startupintro"
 #define SER_LASTPCUUID "lastpcuuid"
 #define SER_CUSTOMPROFILES "customprofiles"
 #define SER_ONBOARDINGDONE "onboardingdone"
@@ -167,6 +168,7 @@ void StreamingPreferences::reload()
     losslessScaling = settings.value(SER_LOSSLESSSCALING, false).toBool();
     batterySaver = settings.value(SER_BATTERYSAVER, true).toBool();
     uiSounds = settings.value(SER_UISOUNDS, true).toBool();
+    startupIntro = settings.value(SER_STARTUPINTRO, true).toBool();
     uiSoundVolume = qBound(0, settings.value(SER_UISOUNDVOLUME, 60).toInt(), 100);
     lastPcUuid = settings.value(SER_LASTPCUUID).toString();
     customProfiles = settings.value(SER_CUSTOMPROFILES, "[]").toString();
@@ -388,6 +390,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_LOSSLESSSCALING, losslessScaling);
     settings.setValue(SER_BATTERYSAVER, batterySaver);
     settings.setValue(SER_UISOUNDS, uiSounds);
+    settings.setValue(SER_STARTUPINTRO, startupIntro);
     settings.setValue(SER_UISOUNDVOLUME, uiSoundVolume);
     settings.setValue(SER_LASTPCUUID, lastPcUuid);
     settings.setValue(SER_CUSTOMPROFILES, customProfiles);

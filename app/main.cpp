@@ -749,6 +749,14 @@ int main(int argc, char *argv[])
     }
 #endif
 
+#ifdef Q_OS_WIN32
+    // The intro video plays through Windows' own decoders, so only the small
+    // Windows backend of Qt Multimedia ships, not its FFmpeg one
+    if (!qEnvironmentVariableIsSet("QT_MEDIA_BACKEND")) {
+        qputenv("QT_MEDIA_BACKEND", "windows");
+    }
+#endif
+
 #ifdef Q_OS_MACOS
     // This avoids using the default keychain for SSL, which may cause
     // password prompts on macOS.

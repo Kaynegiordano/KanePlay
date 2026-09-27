@@ -770,6 +770,14 @@ QtObject {
                 def: function() { return 60 }
             },
             {
+                key: "startupIntro", category: "system", icon: "play", type: "bool",
+                label: qsTr("Startup intro"),
+                desc: qsTr("Plays when KanePlay opens · any button skips it"),
+                get: function() { return StreamingPreferences.startupIntro },
+                set: function(value) { StreamingPreferences.startupIntro = value },
+                def: function() { return true }
+            },
+            {
                 key: "uiDisplayMode", category: "system", icon: "monitor", type: "choice",
                 label: qsTr("KanePlay window"),
                 desc: qsTr("How KanePlay opens"),

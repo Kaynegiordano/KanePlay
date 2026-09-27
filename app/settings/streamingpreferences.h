@@ -157,6 +157,8 @@ public:
     Q_PROPERTY(bool batterySaver MEMBER batterySaver NOTIFY batterySaverChanged)
     Q_PROPERTY(bool uiSounds MEMBER uiSounds NOTIFY uiSoundsChanged)
     Q_PROPERTY(int uiSoundVolume MEMBER uiSoundVolume NOTIFY uiSoundsChanged)
+    // The intro video when KanePlay opens
+    Q_PROPERTY(bool startupIntro MEMBER startupIntro NOTIFY startupIntroChanged)
     Q_PROPERTY(QString lastPcUuid MEMBER lastPcUuid NOTIFY lastPcUuidChanged)
     Q_PROPERTY(QString customProfiles MEMBER customProfiles NOTIFY customProfilesChanged)
     Q_PROPERTY(bool onboardingDone MEMBER onboardingDone NOTIFY onboardingDoneChanged)
@@ -224,6 +226,7 @@ public:
     bool batterySaver;
     bool uiSounds;
     int uiSoundVolume;
+    bool startupIntro;
     QString lastPcUuid;
     // Streaming profiles made by the user: a JSON array of { name, color, values }
     QString customProfiles;
@@ -279,6 +282,7 @@ signals:
     void losslessScalingChanged();
     void batterySaverChanged();
     void uiSoundsChanged();
+    void startupIntroChanged();
     void lastPcUuidChanged();
     void customProfilesChanged();
     void onboardingDoneChanged();

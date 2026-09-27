@@ -16,6 +16,7 @@ report KanePlay issues to them.
   latency of the session, animations and interface sounds.
 - **Streaming profiles**: Performance, Quality, Battery and Weak network, plus your
   own profiles with a name and a color.
+- **Startup intro**, skipped with any button, or turned off in the settings.
 - **Frame generation** through Lossless Scaling: turned on for the stream from
   the settings, or bought on Steam from there.
 - **In-game menu** (Start + Select): stats, gamepad mouse, diagnostic capture
