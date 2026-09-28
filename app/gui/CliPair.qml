@@ -13,12 +13,22 @@ Item {
     }
 
     function onFailed(message) {
+        // Embedded in KaneMode: no window, KaneMode reads the error and the exit code
+        if (embedded) {
+            console.error(message)
+            Qt.exit(1)
+            return
+        }
         stageIndicator.visible = false
         errorDialog.text = message
         errorDialog.open()
     }
 
     function onSuccess(appName) {
+        if (embedded) {
+            Qt.quit()
+            return
+        }
         stageIndicator.visible = false
         pairCompleteDialog.open()
     }

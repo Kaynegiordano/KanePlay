@@ -49,6 +49,8 @@ Item {
     Row {
         anchors.centerIn: parent
         spacing: 5
+        // Embedded in KaneMode, which already said what is starting
+        visible: !embedded
 
         BusyIndicator {
             id: stageSpinner

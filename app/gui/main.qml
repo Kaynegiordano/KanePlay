@@ -129,6 +129,16 @@ ApplicationWindow {
 
     // Show the window according to the user's preferences
     function showWindow() {
+        if (embedded && !runConfigChecks) {
+            // Pairing and quitting report to KaneMode through the exit code, no window
+            if (initialView.indexOf("CliPair") >= 0 || initialView.indexOf("CliQuitStreamSegue") >= 0) {
+                return
+            }
+            // A stream opens on black, where KaneMode left off
+            window.color = "black"
+            window.showFullScreen()
+            return
+        }
         if (SystemProperties.hasDesktopEnvironment) {
             if (StreamingPreferences.uiDisplayMode == StreamingPreferences.UI_MAXIMIZED) {
                 window.showMaximized()
@@ -664,10 +674,11 @@ ApplicationWindow {
     }
 
     // The intro plays on its own, fullscreen, before KanePlay shows up, the way
-    // Steam's Big Picture opens. Not for launches that stream or pair straight away.
+    // Steam's Big Picture opens. Not for launches that stream or pair straight away,
+    // nor when KaneMode opens KanePlay (KANEPLAY_NO_INTRO).
     Loader {
         id: introLoader
-        active: runConfigChecks && StreamingPreferences.startupIntro
+        active: runConfigChecks && StreamingPreferences.startupIntro && !skipIntro
 
         sourceComponent: Window {
             title: "KanePlay"

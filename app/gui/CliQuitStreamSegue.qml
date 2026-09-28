@@ -14,6 +14,12 @@ Item {
     }
 
     function onFailure(message) {
+        // Embedded in KaneMode: no window, KaneMode reads the error and the exit code
+        if (embedded) {
+            console.error(message)
+            Qt.exit(1)
+            return
+        }
         errorDialog.text = message
         errorDialog.open()
     }

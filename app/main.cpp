@@ -566,9 +566,19 @@ int main(int argc, char *argv[])
     // Set these here to allow us to use the default QSettings constructor.
     // These also ensure that our cache directory is named correctly. As such,
     // it is critical that these be called before Path::initialize().
-    QCoreApplication::setOrganizationName("KanePlay");
-    QCoreApplication::setOrganizationDomain("kaneplay.app");
-    QCoreApplication::setApplicationName("KanePlay");
+    if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED")) {
+        // Embedded in KaneMode: its own PCs, client identity, settings and cache
+        // (HKCU\Software\KaneMode\Streaming, %LOCALAPPDATA%\KaneMode\Streaming),
+        // apart from a standalone KanePlay
+        QCoreApplication::setOrganizationName("KaneMode");
+        QCoreApplication::setOrganizationDomain("kanemode.app");
+        QCoreApplication::setApplicationName("Streaming");
+    }
+    else {
+        QCoreApplication::setOrganizationName("KanePlay");
+        QCoreApplication::setOrganizationDomain("kaneplay.app");
+        QCoreApplication::setApplicationName("KanePlay");
+    }
 
     if (usePortableMode()) {
         QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -583,8 +593,11 @@ int main(int argc, char *argv[])
         Path::initialize(false);
     }
 
-    // Moonlight users keep their paired PCs and settings
-    importMoonlightSettings();
+    // Moonlight users keep their paired PCs and settings. Not in KaneMode, which
+    // pairs its own PCs.
+    if (!qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED")) {
+        importMoonlightSettings();
+    }
 
     // Override the default QML cache directory with the one we chose
     if (qEnvironmentVariableIsEmpty("QML_DISK_CACHE_PATH")) {
@@ -1201,6 +1214,12 @@ int main(int argc, char *argv[])
     if (hasGUI) {
         engine.rootContext()->setContextProperty("initialView", initialView);
         engine.rootContext()->setContextProperty("runConfigChecks", commandLineParserResult == GlobalCommandLineParser::NormalStartRequested);
+        // KaneMode opens KanePlay from its own interface, which already had an intro
+        engine.rootContext()->setContextProperty("skipIntro", qEnvironmentVariableIsSet("KANEPLAY_NO_INTRO") ||
+                                                              qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"));
+        // Embedded in KaneMode: KaneMode shows the PCs, pairing and apps itself, so pairing
+        // and quitting run without a window and a stream starts on a plain black screen
+        engine.rootContext()->setContextProperty("embedded", qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"));
 
         // Load the main.qml file
         engine.load(QUrl(QStringLiteral("qrc:/gui/main.qml")));
