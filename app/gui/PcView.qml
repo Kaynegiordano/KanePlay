@@ -34,7 +34,7 @@ FocusScope {
         { glyph: "A", label: primaryLabel(), accent: true },
         { glyph: "X", label: qsTr("PC options") },
         { glyph: "Y", label: qsTr("Settings") },
-        { glyph: "B", label: qsTr("Quit") }
+        { glyph: "B", label: embedded ? "KaneMode" : qsTr("Quit") }
     ]
 
     // Remembers the last PC played on, to show it first next time
@@ -166,6 +166,23 @@ FocusScope {
         stackView.push(appView)
     }
 
+    // KaneMode asked for a game of one of our PCs (KaneModeBridge): its library opens
+    // and plays or resumes it. False while the PC isn't found, online and paired yet.
+    function openPcLibrary(uuid, appId, appName)
+    {
+        for (var i = 0; i < pcList.count; i++) {
+            var item = pcList.itemAtIndex(i)
+            if (item !== null && item.uuid === uuid) {
+                pcList.currentIndex = i
+                if (!canOpenLibrary) {
+                    return false
+                }
+                openLibrary(appId, appName)
+                return true
+            }
+        }
+        return false
+    }
     function startPairing()
     {
         var pin = computerModel.generatePinString()

@@ -50,7 +50,7 @@ win32 {
     }
 
     INCLUDEPATH += $$PWD/../libs/windows/include
-    LIBS += ws2_32.lib winmm.lib dxva2.lib ole32.lib gdi32.lib user32.lib d3d9.lib dwmapi.lib dbghelp.lib
+    LIBS += ws2_32.lib winmm.lib dxva2.lib ole32.lib gdi32.lib user32.lib d3d9.lib dwmapi.lib dbghelp.lib shell32.lib
 }
 macx:!disable-prebuilts {
     !exists($$PWD/../libs/mac) {
@@ -202,6 +202,7 @@ SOURCES += \
     streaming/bandwidth.cpp \
     streaming/streamutils.cpp \
     backend/autoupdatechecker.cpp \
+    backend/kanemodebridge.cpp \
     path.cpp \
     settings/mappingmanager.cpp \
     gui/sdlgamepadkeynavigation.cpp \
@@ -246,6 +247,7 @@ HEADERS += \
     streaming/bandwidth.h \
     streaming/streamutils.h \
     backend/autoupdatechecker.h \
+    backend/kanemodebridge.h \
     path.h \
     settings/mappingmanager.h \
     gui/sdlgamepadkeynavigation.h \

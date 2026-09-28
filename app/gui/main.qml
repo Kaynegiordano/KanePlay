@@ -20,7 +20,8 @@ ApplicationWindow {
     property bool clearOnBack: false
 
     id: window
-    title: "KanePlay"
+    // Embedded in KaneMode: part of KaneMode (whose own window is titled "KaneMode")
+    title: embedded ? "KaneMode · Streaming" : "KanePlay"
     width: 1280
     height: 720
 
@@ -136,6 +137,11 @@ ApplicationWindow {
             }
             // A stream opens on black, where KaneMode left off
             window.color = "black"
+            window.showFullScreen()
+            return
+        }
+        if (embedded) {
+            // Full screen like KaneMode, whatever the standalone KanePlay's preference
             window.showFullScreen()
             return
         }
@@ -257,6 +263,9 @@ ApplicationWindow {
             if (depth > 1) {
                 goBack()
             }
+            else if (embedded) {
+                returnToKaneMode()
+            }
             else {
                 quitConfirmationDialog.open()
             }
@@ -265,6 +274,9 @@ ApplicationWindow {
         Keys.onBackPressed: {
             if (depth > 1) {
                 goBack()
+            }
+            else if (embedded) {
+                returnToKaneMode()
             }
             else {
                 quitConfirmationDialog.open()
@@ -345,6 +357,74 @@ ApplicationWindow {
         SdlGamepadKeyNavigation.notifyWindowFocus(visible && active)
     }
 
+    // ---- Embedded in KaneMode (see KaneModeBridge)
+
+    // Back to KaneMode: its window comes forward and ours steps aside, ready to come
+    // back where it was (a paused session stays one button away)
+    function returnToKaneMode()
+    {
+        UiSound.play("back")
+        kaneMode.returnToKaneMode()
+        window.showMinimized()
+    }
+
+    function bringToFront()
+    {
+        window.showFullScreen()
+        window.raise()
+        window.requestActivate()
+        kaneMode.activate()
+    }
+
+    // Game picked in KaneMode's library: its PC's library opens and plays or resumes it,
+    // as soon as the PC is found (it may still be waking up or being searched for)
+    property var pendingLaunch: null
+
+    function tryPendingLaunch()
+    {
+        if (pendingLaunch === null || homeView === null) {
+            return false
+        }
+        // A stream in progress is left alone
+        if (stackView.currentItem instanceof StreamSegue) {
+            return true
+        }
+        if (stackView.depth > 1) {
+            stackView.pop(null)
+        }
+        return homeView.openPcLibrary(pendingLaunch.uuid, pendingLaunch.appId, pendingLaunch.appName)
+    }
+
+    Timer {
+        id: pendingLaunchTimer
+        property int tries: 0
+        interval: 250
+        repeat: true
+        onTriggered: {
+            if (tryPendingLaunch() || ++tries > 120) {
+                stop()
+                tries = 0
+                pendingLaunch = null
+            }
+        }
+    }
+
+    Connections {
+        target: embedded ? kaneMode : null
+        ignoreUnknownSignals: true
+
+        function onShowRequested() {
+            bringToFront()
+        }
+
+        function onLaunchRequested(uuid, appId, appName) {
+            bringToFront()
+            pendingLaunch = { "uuid": uuid, "appId": appId, "appName": appName }
+            pendingLaunchTimer.tries = 0
+            pendingLaunchTimer.restart()
+        }
+    }
+
     function navigateTo(url, objectType)
     {
         var existingItem = stackView.find(function(item, index) {
@@ -365,8 +445,9 @@ ApplicationWindow {
         id: toolBar
         height: 76
 
-        // Logo and name
+        // Logo and name (in KaneMode: its logo, and a click goes back to it)
         Row {
+            id: brandRow
             anchors.left: parent.left
             anchors.leftMargin: Theme.pagePadding
             anchors.verticalCenter: parent.verticalCenter
@@ -374,7 +455,7 @@ ApplicationWindow {
 
             Image {
                 anchors.verticalCenter: parent.verticalCenter
-                source: "qrc:/res/kaneplay.svg"
+                source: embedded ? "qrc:/res/kanemode.svg" : "qrc:/res/kaneplay.svg"
                 sourceSize.width: 34
                 sourceSize.height: 34
             }
@@ -383,13 +464,20 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 // Hidden on narrow windows so the tabs keep their room
                 visible: toolBar.width > 960
-                text: "KanePlay"
+                text: embedded ? qsTr("Streaming") : "KanePlay"
                 font.family: Theme.displayFont
                 font.pixelSize: 19
                 font.weight: Font.Bold
                 font.letterSpacing: -0.4
                 color: Theme.text
             }
+        }
+
+        MouseArea {
+            anchors.fill: brandRow
+            enabled: embedded
+            cursorShape: Qt.PointingHandCursor
+            onClicked: returnToKaneMode()
         }
 
         // Tabs, switched with LB and RB on a gamepad
@@ -493,6 +581,10 @@ ApplicationWindow {
                 }
 
                 Component.onCompleted: {
+                    // In KaneMode, KaneMode's updates bring the new streaming engine
+                    if (embedded) {
+                        return
+                    }
                     AutoUpdateChecker.onUpdateAvailable.connect(updateAvailable)
                     AutoUpdateChecker.start()
                 }
@@ -529,7 +621,7 @@ ApplicationWindow {
 
             KpButton {
                 id: helpButton
-                visible: SystemProperties.hasBrowser
+                visible: SystemProperties.hasBrowser && !embedded
                 round: true
                 iconName: "help"
                 implicitHeight: 44
@@ -560,7 +652,7 @@ ApplicationWindow {
         { glyph: "A", label: stackView.currentItem instanceof AppView ? qsTr("Play") :
                              stackView.currentItem instanceof SettingsView ? qsTr("Change") : qsTr("Select"), accent: true },
         { glyph: "X", label: qsTr("Options") },
-        { glyph: "B", label: stackView.depth > 1 ? qsTr("Back") : qsTr("Quit") }
+        { glyph: "B", label: stackView.depth > 1 ? qsTr("Back") : embedded ? "KaneMode" : qsTr("Quit") }
     ]
 
     // Gamepad button hints, shown while a gamepad is connected (always on handhelds)

@@ -15,6 +15,7 @@
 #include <QTemporaryFile>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
 #include <QRegularExpression>
 
 #ifdef Q_OS_UNIX
@@ -38,6 +39,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <dxgi1_6.h>
+#include <shobjidl_core.h>
 #elif defined(Q_OS_LINUX)
 #include <openssl/ssl.h>
 #endif
@@ -52,6 +54,7 @@
 #include "gui/computermodel.h"
 #include "gui/appmodel.h"
 #include "backend/autoupdatechecker.h"
+#include "backend/kanemodebridge.h"
 #include "backend/computermanager.h"
 #include "backend/systemproperties.h"
 #include "streaming/session.h"
@@ -555,7 +558,8 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_WIN32
     // Held until KanePlay exits (see isAnotherKanePlayRunning())
     HANDLE instanceMutex = nullptr;
-    if (argc <= 1 && isAnotherKanePlayRunning(instanceMutex)) {
+    // Embedded in KaneMode, KaneModeBridge keeps a single instance of its own
+    if (argc <= 1 && !qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") && isAnotherKanePlayRunning(instanceMutex)) {
         return 0;
     }
 #endif
@@ -1087,6 +1091,28 @@ int main(int argc, char *argv[])
     app.setWindowIcon(QIcon(":/res/kaneplay.svg"));
 #endif
 
+    // Embedded in KaneMode: one KanePlay only, which takes the commands of the next
+    // launches, and KaneMode's icon and taskbar identity, as a part of KaneMode
+    KaneModeBridge* kaneModeBridge = nullptr;
+    bool embeddedGui = qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") &&
+                       commandLineParserResult == GlobalCommandLineParser::NormalStartRequested;
+    if (embeddedGui) {
+        if (KaneModeBridge::forwardToRunningInstance()) {
+            return 0;
+        }
+        QString icon = qEnvironmentVariable("KANEMODE_ICON");
+        if (!icon.isEmpty() && QFile::exists(icon)) {
+            app.setWindowIcon(QIcon(icon));
+        }
+#ifdef Q_OS_WIN32
+        QString aumid = qEnvironmentVariable("KANEMODE_AUMID");
+        if (!aumid.isEmpty()) {
+            SetCurrentProcessExplicitAppUserModelID((PCWSTR)aumid.utf16());
+        }
+#endif
+        kaneModeBridge = new KaneModeBridge(&app);
+    }
+
     // This is necessary to show our icon correctly on Wayland
     app.setDesktopFileName("com.moonlight_stream.Moonlight");
     qputenv("SDL_VIDEO_WAYLAND_WMCLASS", "com.moonlight_stream.Moonlight");
@@ -1220,11 +1246,16 @@ int main(int argc, char *argv[])
         // Embedded in KaneMode: KaneMode shows the PCs, pairing and apps itself, so pairing
         // and quitting run without a window and a stream starts on a plain black screen
         engine.rootContext()->setContextProperty("embedded", qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"));
+        engine.rootContext()->setContextProperty("kaneMode", kaneModeBridge);
 
         // Load the main.qml file
         engine.load(QUrl(QStringLiteral("qrc:/gui/main.qml")));
         if (engine.rootObjects().isEmpty())
             return -1;
+
+        if (kaneModeBridge != nullptr) {
+            kaneModeBridge->listen();
+        }
     }
 
     int err = app.exec();
