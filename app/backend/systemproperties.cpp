@@ -60,6 +60,8 @@ SystemProperties::SystemProperties()
     isRunningXWayland = isRunningWayland && QGuiApplication::platformName() == "xcb";
     usesMaterial3Theme = QLibraryInfo::version() >= QVersionNumber(6, 5, 0);
     reducedMotion = false;
+    embedded = qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED");
+    kaneModeAccent = qEnvironmentVariable("KANEMODE_ACCENT");
 
 #ifdef Q_OS_WIN32
     // "Animation effects" in the accessibility settings of Windows

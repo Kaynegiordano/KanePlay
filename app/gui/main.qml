@@ -21,7 +21,7 @@ ApplicationWindow {
 
     id: window
     // Embedded in KaneMode: part of KaneMode (whose own window is titled "KaneMode")
-    title: embedded ? "KaneMode · Streaming" : "KanePlay"
+    title: embedded ? "KaneMode · KanePlay" : "KanePlay"
     width: 1280
     height: 720
 
@@ -445,7 +445,7 @@ ApplicationWindow {
         id: toolBar
         height: 76
 
-        // Logo and name (in KaneMode: its logo, and a click goes back to it)
+        // Logo and name (in KaneMode, a click goes back to KaneMode)
         Row {
             id: brandRow
             anchors.left: parent.left
@@ -455,7 +455,7 @@ ApplicationWindow {
 
             Image {
                 anchors.verticalCenter: parent.verticalCenter
-                source: embedded ? "qrc:/res/kanemode.svg" : "qrc:/res/kaneplay.svg"
+                source: "qrc:/res/kaneplay.svg"
                 sourceSize.width: 34
                 sourceSize.height: 34
             }
@@ -464,7 +464,7 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 // Hidden on narrow windows so the tabs keep their room
                 visible: toolBar.width > 960
-                text: embedded ? qsTr("Streaming") : "KanePlay"
+                text: "KanePlay"
                 font.family: Theme.displayFont
                 font.pixelSize: 19
                 font.weight: Font.Bold

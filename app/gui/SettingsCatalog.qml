@@ -988,7 +988,7 @@ QtObject {
 
     // Built-in streaming profiles
     readonly property var profiles: [
-        { key: "performance", icon: "layers", label: qsTr("Performance"), color: "#FF6A3D",
+        { key: "performance", icon: "layers", label: qsTr("Performance"), color: Theme.kaneMode ? Theme.accent : "#FF6A3D",
           summary: qsTr("Auto · auto FPS"),
           apply: function() {
               setResolution(0, 0, true)
