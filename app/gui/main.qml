@@ -293,6 +293,16 @@ ApplicationWindow {
         Keys.onHangupPressed: {
             settingsButton.clicked()
         }
+
+        // Embedded in KaneMode: Select and Start open KaneMode's menu and quick access
+        // menu on top of us; closing them comes back here
+        Keys.onPressed: (event) => {
+            if (embedded && (event.key === Qt.Key_Launch0 || event.key === Qt.Key_Launch1)) {
+                UiSound.play("select")
+                kaneMode.openInKaneMode(event.key === Qt.Key_Launch0 ? "menu" : "qam")
+                event.accepted = true
+            }
+        }
     }
 
     // This timer keeps us polling for 5 minutes of inactivity
@@ -359,13 +369,21 @@ ApplicationWindow {
 
     // ---- Embedded in KaneMode (see KaneModeBridge)
 
-    // Back to KaneMode: its window comes forward and ours steps aside, ready to come
-    // back where it was (a paused session stays one button away)
+    // Back to KaneMode: its window comes forward and KanePlay closes. A paused session
+    // keeps running on the PC: KaneMode's KanePlay card resumes it.
     function returnToKaneMode()
     {
         UiSound.play("back")
         kaneMode.returnToKaneMode()
-        window.showMinimized()
+        window.hide()
+        // Let the sound play, then quit
+        quitTimer.start()
+    }
+
+    Timer {
+        id: quitTimer
+        interval: 250
+        onTriggered: Qt.quit()
     }
 
     function bringToFront()

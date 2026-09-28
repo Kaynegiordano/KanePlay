@@ -30,6 +30,10 @@ public:
     // Brings our window forward (Windows only lets it with the launcher's consent)
     Q_INVOKABLE void activate();
 
+    // Opens KaneMode's "menu" or "qam" (quick access) on top of us; KaneMode gives us
+    // the foreground back when it is closed
+    Q_INVOKABLE void openInKaneMode(const QString& panel);
+
 signals:
     void showRequested();
     void launchRequested(QString uuid, int appId, QString appName);

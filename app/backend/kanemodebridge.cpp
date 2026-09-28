@@ -96,6 +96,36 @@ void KaneModeBridge::activate()
 #endif
 }
 
+void KaneModeBridge::openInKaneMode(const QString& panel)
+{
+#ifdef Q_OS_WIN32
+    HWND kaneMode = FindWindowW(nullptr, L"KaneMode");
+    if (kaneMode == nullptr) {
+        return;
+    }
+    // KaneMode may take the foreground, and knows where to come back (wParam)
+    DWORD pid = 0;
+    GetWindowThreadProcessId(kaneMode, &pid);
+    AllowSetForegroundWindow(pid);
+    HWND ours = nullptr;
+    for (QWindow* window : QGuiApplication::topLevelWindows()) {
+        if (window->isVisible() && window->transientParent() == nullptr) {
+            ours = (HWND)window->winId();
+            break;
+        }
+    }
+    QString message = QStringLiteral("open\t") + panel;
+    COPYDATASTRUCT data;
+    data.dwData = 0x4B4D; // "KM"
+    data.cbData = (DWORD)((message.size() + 1) * sizeof(wchar_t));
+    data.lpData = (PVOID)message.utf16();
+    DWORD_PTR result = 0;
+    SendMessageTimeoutW(kaneMode, WM_COPYDATA, (WPARAM)ours, (LPARAM)&data, SMTO_ABORTIFHUNG, 1000, &result);
+#else
+    Q_UNUSED(panel)
+#endif
+}
+
 void KaneModeBridge::returnToKaneMode()
 {
 #ifdef Q_OS_WIN32

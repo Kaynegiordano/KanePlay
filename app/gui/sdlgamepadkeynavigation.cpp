@@ -195,8 +195,20 @@ void SdlGamepadKeyNavigation::onPollingTimerFired()
             case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
                 sendKey(type, Qt::Key_PageDown);
                 break;
-            case SDL_CONTROLLER_BUTTON_Y:
+            case SDL_CONTROLLER_BUTTON_BACK:
+                // Embedded in KaneMode: Select opens KaneMode's main menu (see main.qml)
+                if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED")) {
+                    sendKey(type, Qt::Key_Launch0);
+                }
+                break;
             case SDL_CONTROLLER_BUTTON_START:
+                // Embedded in KaneMode: Start opens KaneMode's quick access menu
+                if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED")) {
+                    sendKey(type, Qt::Key_Launch1);
+                    break;
+                }
+                // fallthrough
+            case SDL_CONTROLLER_BUTTON_Y:
                 // HACK: We use this keycode to inform main.qml
                 // to show the settings when Key_Menu is handled
                 // by the control in focus.
