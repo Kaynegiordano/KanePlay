@@ -9,6 +9,31 @@
 
 #ifdef Q_OS_WIN32
 #include <windows.h>
+
+// KaneMode's own window: titled exactly "KaneMode", WPF class "HwndWrapper[KaneMode;;...]".
+// KaneMode's Game Bar widget also has a (hidden) window titled "KaneMode": FindWindow could
+// return it, KanePlay then gave the foreground to the widget and KaneMode's gamepad stopped
+// answering (and Start / Select went to the widget).
+static BOOL CALLBACK findKaneModeProc(HWND hwnd, LPARAM param)
+{
+    wchar_t title[16];
+    if (GetWindowTextW(hwnd, title, 16) == 0 || wcscmp(title, L"KaneMode") != 0) {
+        return TRUE;
+    }
+    wchar_t cls[64];
+    if (GetClassNameW(hwnd, cls, 64) == 0 || wcsncmp(cls, L"HwndWrapper[KaneMode", 20) != 0) {
+        return TRUE;
+    }
+    *reinterpret_cast<HWND*>(param) = hwnd;
+    return FALSE;
+}
+
+static HWND findKaneMode()
+{
+    HWND found = nullptr;
+    EnumWindows(findKaneModeProc, reinterpret_cast<LPARAM>(&found));
+    return found;
+}
 #endif
 
 static QString serverName()
@@ -99,7 +124,7 @@ void KaneModeBridge::activate()
 void KaneModeBridge::openInKaneMode(const QString& panel)
 {
 #ifdef Q_OS_WIN32
-    HWND kaneMode = FindWindowW(nullptr, L"KaneMode");
+    HWND kaneMode = findKaneMode();
     if (kaneMode == nullptr) {
         return;
     }
@@ -130,7 +155,7 @@ void KaneModeBridge::returnToKaneMode()
 {
 #ifdef Q_OS_WIN32
     // KaneMode's window is titled exactly "KaneMode" (ours is "KaneMode · KanePlay")
-    HWND kaneMode = FindWindowW(nullptr, L"KaneMode");
+    HWND kaneMode = findKaneMode();
     if (kaneMode != nullptr) {
         if (IsIconic(kaneMode)) {
             ShowWindow(kaneMode, SW_RESTORE);
