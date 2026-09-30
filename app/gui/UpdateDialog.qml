@@ -89,10 +89,8 @@ NavigableDialog {
         RowLayout {
             spacing: 16
 
-            Image {
-                source: "qrc:/res/kaneplay.svg"
-                sourceSize.width: 56
-                sourceSize.height: 56
+            AppLogo {
+                size: 56
             }
 
             ColumnLayout {

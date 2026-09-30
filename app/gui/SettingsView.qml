@@ -118,11 +118,14 @@ FocusScope {
             NumberAnimation { duration: Theme.durationFast }
         }
 
+        // KaneMode: white when selected with the gamepad, dark text
+        readonly property bool whiteFocus: Theme.whiteFocus && activeFocus
+
         background: Rectangle {
-            radius: 22
-            color: bar.hovered || bar.activeFocus ? Theme.raised : Theme.surface
+            radius: Theme.kaneMode ? Theme.radiusLarge : 22
+            color: bar.whiteFocus ? Theme.focusFill : bar.hovered || bar.activeFocus ? Theme.raised : Theme.surface
             border.width: 2
-            border.color: bar.activeFocus ? bar.tint : Qt.rgba(bar.tint.r, bar.tint.g, bar.tint.b, 0.35)
+            border.color: bar.whiteFocus ? Theme.focusFill : bar.activeFocus ? bar.tint : Qt.rgba(bar.tint.r, bar.tint.g, bar.tint.b, 0.35)
 
             Behavior on color {
                 ColorAnimation { duration: Theme.durationStandard }
@@ -199,13 +202,13 @@ FocusScope {
                 font.family: Theme.textFont
                 font.pixelSize: 15
                 font.weight: Font.Bold
-                color: bar.activeFocus ? Theme.text : Theme.textSecondary
+                color: bar.whiteFocus ? Theme.focusText : bar.activeFocus ? Theme.text : Theme.textSecondary
             }
 
             KpIcon {
                 name: "chevron"
                 size: 20
-                color: bar.activeFocus ? bar.tint : Theme.textSecondary
+                color: bar.whiteFocus ? Theme.focusMuted : bar.activeFocus ? bar.tint : Theme.textSecondary
             }
         }
     }
@@ -241,11 +244,14 @@ FocusScope {
             NumberAnimation { duration: Theme.durationFast }
         }
 
+        // KaneMode: white when selected with the gamepad, dark text
+        readonly property bool whiteFocus: Theme.whiteFocus && activeFocus
+
         background: Rectangle {
-            radius: 20
-            color: valueTile.activeFocus ? Theme.raised : (valueTile.hovered ? Theme.hover : Theme.surface)
+            radius: Theme.kaneMode ? Theme.radiusLarge : 20
+            color: valueTile.whiteFocus ? Theme.focusFill : valueTile.activeFocus ? Theme.raised : (valueTile.hovered ? Theme.hover : Theme.surface)
             border.width: 2
-            border.color: valueTile.activeFocus ? Theme.accent : "transparent"
+            border.color: valueTile.activeFocus && !valueTile.whiteFocus ? Theme.accent : "transparent"
 
             Behavior on color {
                 ColorAnimation { duration: Theme.durationFast }
@@ -261,7 +267,7 @@ FocusScope {
                 KpIcon {
                     name: valueTile.iconName
                     size: 18
-                    color: Theme.textSecondary
+                    color: valueTile.whiteFocus ? Theme.focusMuted : Theme.textSecondary
                 }
 
                 Text {
@@ -271,7 +277,7 @@ FocusScope {
                     font.pixelSize: 12
                     font.weight: Font.Bold
                     font.letterSpacing: 0.9
-                    color: Theme.textSecondary
+                    color: valueTile.whiteFocus ? Theme.focusMuted : Theme.textSecondary
                     elide: Text.ElideRight
                 }
             }
@@ -283,7 +289,7 @@ FocusScope {
                 font.pixelSize: 24
                 font.weight: Font.DemiBold
                 font.letterSpacing: -0.5
-                color: Theme.text
+                color: valueTile.whiteFocus ? Theme.focusText : Theme.text
                 fontSizeMode: Text.HorizontalFit
                 minimumPixelSize: 16
                 elide: Text.ElideRight

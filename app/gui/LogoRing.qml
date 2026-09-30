@@ -68,10 +68,8 @@ Item {
         }
     }
 
-    Image {
+    AppLogo {
         anchors.centerIn: parent
-        source: "qrc:/res/kaneplay.svg"
-        sourceSize.width: ring.size * 0.46
-        sourceSize.height: ring.size * 0.46
+        size: ring.size * 0.46
     }
 }

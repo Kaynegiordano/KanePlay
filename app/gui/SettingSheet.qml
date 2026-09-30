@@ -196,11 +196,14 @@ Popup {
                     focusPolicy: Qt.NoFocus
                     padding: 0
 
+                    // KaneMode: white when selected with the gamepad, dark text
+                    readonly property bool whiteFocus: Theme.whiteFocus && ListView.isCurrentItem && choiceList.activeFocus
+
                     background: Rectangle {
-                        radius: 14
-                        color: option.ListView.isCurrentItem && choiceList.activeFocus ? Theme.raised :
+                        radius: Theme.kaneMode ? Theme.radius : 14
+                        color: option.whiteFocus ? Theme.focusFill : option.ListView.isCurrentItem && choiceList.activeFocus ? Theme.raised :
                                option.hovered ? Theme.hover : "transparent"
-                        border.width: option.ListView.isCurrentItem && choiceList.activeFocus ? 2 : 0
+                        border.width: option.ListView.isCurrentItem && choiceList.activeFocus && !option.whiteFocus ? 2 : 0
                         border.color: Theme.accent
                     }
 
@@ -235,7 +238,7 @@ Popup {
                             font.family: Theme.textFont
                             font.pixelSize: 16
                             font.weight: option.chosen ? Font.Bold : Font.DemiBold
-                            color: Theme.text
+                            color: option.whiteFocus ? Theme.focusText : Theme.text
                             elide: Text.ElideRight
                         }
                     }

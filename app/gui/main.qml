@@ -472,11 +472,9 @@ ApplicationWindow {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 12
 
-            Image {
+            AppLogo {
                 anchors.verticalCenter: parent.verticalCenter
-                source: "qrc:/res/kaneplay.svg"
-                sourceSize.width: 34
-                sourceSize.height: 34
+                size: 34
             }
 
             Text {

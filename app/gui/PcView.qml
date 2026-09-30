@@ -324,10 +324,8 @@ FocusScope {
             Layout.alignment: Qt.AlignVCenter
             spacing: 28
 
-            Image {
-                source: "qrc:/res/kaneplay.svg"
-                sourceSize.width: 88
-                sourceSize.height: 88
+            AppLogo {
+                size: 88
             }
 
             ColumnLayout {
@@ -453,7 +451,7 @@ FocusScope {
                         radius: 18
                         color: Theme.raised
                         border.width: 2
-                        border.color: welcomeButton.activeFocus ? Theme.accent : "transparent"
+                        border.color: welcomeButton.activeFocus ? (Theme.whiteFocus ? Theme.focusFill : Theme.accent) : "transparent"
 
                         RowLayout {
                             anchors.fill: parent
@@ -625,11 +623,9 @@ FocusScope {
                 visible: pcList.count === 0
                 spacing: 20
 
-                Image {
+                AppLogo {
                     Layout.alignment: Qt.AlignHCenter
-                    source: "qrc:/res/kaneplay.svg"
-                    sourceSize.width: 88
-                    sourceSize.height: 88
+                    size: 88
                 }
 
                 Text {
@@ -761,14 +757,15 @@ FocusScope {
                         Rectangle {
                             Layout.preferredWidth: 60
                             Layout.preferredHeight: 80
-                            radius: 10
-                            color: Theme.accent
+                            radius: Theme.radius
+                            // KaneMode: discreet tile, the accent only on the icon
+                            color: Theme.kaneMode ? Theme.raised : Theme.accent
 
                             KpIcon {
                                 anchors.centerIn: parent
                                 name: "gamepad"
                                 size: 26
-                                color: Theme.accentText
+                                color: Theme.kaneMode ? Theme.accent : Theme.accentText
                             }
                         }
 
@@ -975,11 +972,14 @@ FocusScope {
                     padding: 0
                     focusPolicy: Qt.NoFocus
 
+                    // KaneMode: white when selected with the gamepad, dark text
+                    readonly property bool whiteFocus: Theme.whiteFocus && isCurrent && pcList.activeFocus
+
                     background: Rectangle {
                         radius: Theme.radius
-                        color: pcRow.isCurrent ? Theme.raised : (pcRow.hovered ? Theme.hover : Theme.surface)
+                        color: pcRow.whiteFocus ? Theme.focusFill : pcRow.isCurrent ? Theme.raised : (pcRow.hovered ? Theme.hover : Theme.surface)
                         border.width: 2
-                        border.color: pcRow.isCurrent && pcList.activeFocus ? Theme.accent :
+                        border.color: pcRow.whiteFocus ? "transparent" : pcRow.isCurrent && pcList.activeFocus ? Theme.accent :
                                       pcRow.isCurrent ? Theme.border : "transparent"
 
                         Behavior on color {
@@ -1024,7 +1024,7 @@ FocusScope {
                                 text: pcRow.pcName
                                 font.pixelSize: 16
                                 font.weight: Font.Bold
-                                color: pcRow.online ? Theme.text : Theme.textSecondary
+                                color: pcRow.whiteFocus ? Theme.focusText : pcRow.online ? Theme.text : Theme.textSecondary
                                 elide: Text.ElideRight
                             }
 
@@ -1042,7 +1042,7 @@ FocusScope {
                                 Text {
                                     text: statusText(pcRow)
                                     font.pixelSize: 13
-                                    color: Theme.textSecondary
+                                    color: pcRow.whiteFocus ? Theme.focusMuted : Theme.textSecondary
                                 }
                             }
                         }

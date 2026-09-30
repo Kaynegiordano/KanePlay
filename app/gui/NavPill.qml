@@ -22,7 +22,7 @@ Button {
     contentItem: Text {
         text: pill.text
         font: pill.font
-        color: pill.selected ? Theme.background :
+        color: Theme.whiteFocus && pill.visualFocus ? Theme.focusText : pill.selected ? Theme.background :
                pill.hovered || pill.activeFocus ? Theme.text : Theme.textSecondary
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
@@ -34,9 +34,9 @@ Button {
 
     background: Rectangle {
         radius: height / 2
-        color: pill.selected ? Theme.text :
+        color: Theme.whiteFocus && pill.visualFocus ? Theme.focusFill : pill.selected ? Theme.text :
                pill.hovered ? Qt.rgba(1, 1, 1, 0.06) : "transparent"
-        border.width: pill.visualFocus ? 2 : 0
+        border.width: pill.visualFocus && !Theme.whiteFocus ? 2 : 0
         border.color: Theme.accent
 
         Behavior on color {

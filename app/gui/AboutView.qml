@@ -116,10 +116,8 @@ FocusScope {
                 RowLayout {
                     spacing: 20
 
-                    Image {
-                        source: "qrc:/res/kaneplay.svg"
-                        sourceSize.width: 84
-                        sourceSize.height: 84
+                    AppLogo {
+                        size: 84
                     }
 
                     ColumnLayout {
@@ -260,8 +258,9 @@ FocusScope {
 
                         background: Rectangle {
                             radius: 12
-                            color: licenseRow.activeFocus ? Theme.raised : (licenseRow.hovered ? Theme.hover : "transparent")
-                            border.width: licenseRow.activeFocus ? 2 : 0
+                            // KaneMode: white when selected with the gamepad, dark text
+                            color: Theme.whiteFocus && licenseRow.activeFocus ? Theme.focusFill : licenseRow.activeFocus ? Theme.raised : (licenseRow.hovered ? Theme.hover : "transparent")
+                            border.width: licenseRow.activeFocus && !Theme.whiteFocus ? 2 : 0
                             border.color: Theme.accent
                         }
 
@@ -273,7 +272,7 @@ FocusScope {
                                 text: modelData.name
                                 font.pixelSize: 15
                                 font.weight: Font.DemiBold
-                                color: Theme.text
+                                color: Theme.whiteFocus && licenseRow.activeFocus ? Theme.focusText : Theme.text
                                 elide: Text.ElideRight
                             }
 

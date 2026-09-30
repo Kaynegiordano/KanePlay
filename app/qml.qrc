@@ -32,6 +32,7 @@
         <file>gui/Icons.js</file>
         <file>gui/FilterChip.qml</file>
         <file>gui/LogoRing.qml</file>
+        <file>gui/AppLogo.qml</file>
         <file>gui/ArcSpinner.qml</file>
         <file>gui/SettingsCatalog.qml</file>
         <file>gui/KpSwitch.qml</file>

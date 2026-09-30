@@ -181,6 +181,8 @@ Popup {
                 readonly property var entry: modelData
                 readonly property bool current: ListView.isCurrentItem && list.activeFocus
                 readonly property bool deleting: picker.confirmDelete === index
+                // KaneMode: white when selected with the gamepad, dark text
+                readonly property bool whiteFocus: Theme.whiteFocus && current && !deleting
                 readonly property color tint: entry.type === "profile" ? entry.profile.color : Theme.accent2
 
                 width: ListView.view.width
@@ -205,8 +207,9 @@ Popup {
                     anchors.fill: parent
                     radius: 16
                     color: row.deleting ? Qt.rgba(1, 0.48, 0.44, 0.14) :
+                           row.whiteFocus ? Theme.focusFill :
                            row.current ? Theme.raised : (mouseArea.containsMouse ? Theme.hover : "transparent")
-                    border.width: row.current ? 2 : 0
+                    border.width: row.current && !row.whiteFocus ? 2 : 0
                     border.color: row.deleting ? Theme.danger : row.tint
 
                     MouseArea {
@@ -254,7 +257,7 @@ Popup {
                                 font.family: Theme.textFont
                                 font.pixelSize: 16
                                 font.weight: Font.Bold
-                                color: row.deleting ? Theme.danger : Theme.text
+                                color: row.deleting ? Theme.danger : row.whiteFocus ? Theme.focusText : Theme.text
                                 elide: Text.ElideRight
                             }
 
@@ -265,7 +268,7 @@ Popup {
                                       row.deleting ? qsTr("A to delete, B to keep it") : row.entry.profile.summary
                                 font.family: Theme.textFont
                                 font.pixelSize: 13
-                                color: Theme.textSecondary
+                                color: row.whiteFocus ? Theme.focusMuted : Theme.textSecondary
                                 elide: Text.ElideRight
                             }
                         }

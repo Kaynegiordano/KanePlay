@@ -25,6 +25,7 @@ public:
     // Embedded in KaneMode (KANEPLAY_EMBEDDED): KaneMode's colors, and its accent color
     Q_PROPERTY(bool embedded MEMBER embedded CONSTANT)
     Q_PROPERTY(QString kaneModeAccent MEMBER kaneModeAccent CONSTANT)
+    Q_PROPERTY(QString kaneModeCorners MEMBER kaneModeCorners CONSTANT)
     Q_PROPERTY(bool isDarwin MEMBER isDarwin CONSTANT)
     Q_PROPERTY(QString friendlyNativeArchName MEMBER friendlyNativeArchName CONSTANT)
     Q_PROPERTY(bool hasDesktopEnvironment MEMBER hasDesktopEnvironment CONSTANT)
@@ -80,6 +81,7 @@ private:
     bool reducedMotion;
     bool embedded;
     QString kaneModeAccent;
+    QString kaneModeCorners;
     QString friendlyNativeArchName;
     bool hasDesktopEnvironment;
     bool hasBrowser;

@@ -62,6 +62,7 @@ SystemProperties::SystemProperties()
     reducedMotion = false;
     embedded = qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED");
     kaneModeAccent = qEnvironmentVariable("KANEMODE_ACCENT");
+    kaneModeCorners = qEnvironmentVariable("KANEMODE_CORNERS");
 
 #ifdef Q_OS_WIN32
     // "Animation effects" in the accessibility settings of Windows

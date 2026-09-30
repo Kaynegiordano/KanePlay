@@ -22,15 +22,15 @@ Button {
     contentItem: Text {
         text: chip.text
         font: chip.font
-        color: chip.selected ? Theme.background : (chip.hovered ? Theme.text : Theme.textSecondary)
+        color: Theme.whiteFocus && chip.visualFocus ? Theme.focusText : chip.selected ? Theme.background : (chip.hovered ? Theme.text : Theme.textSecondary)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
 
     background: Rectangle {
         radius: height / 2
-        color: chip.selected ? Theme.text : (chip.hovered ? Qt.rgba(1, 1, 1, 0.06) : "transparent")
-        border.width: chip.visualFocus ? 2 : 1
+        color: Theme.whiteFocus && chip.visualFocus ? Theme.focusFill : chip.selected ? Theme.text : (chip.hovered ? Qt.rgba(1, 1, 1, 0.06) : "transparent")
+        border.width: chip.visualFocus && !Theme.whiteFocus ? 2 : 1
         border.color: chip.visualFocus ? Theme.accent : (chip.selected ? Theme.text : Theme.border)
 
         Behavior on color {

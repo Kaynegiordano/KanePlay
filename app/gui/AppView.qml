@@ -345,11 +345,12 @@ FocusScope {
                         // Focus ring around the selected cover
                         Rectangle {
                             anchors.fill: parent
-                            anchors.margins: -5
-                            radius: parent.radius + 5
+                            // KaneMode: white ring on the cover itself, like its own covers
+                            anchors.margins: Theme.whiteFocus ? 0 : -5
+                            radius: Theme.whiteFocus ? parent.radius : parent.radius + 5
                             color: "transparent"
                             border.width: 3
-                            border.color: Theme.accent
+                            border.color: Theme.whiteFocus ? Theme.focusFill : Theme.accent
                             // Fainter while the focus is on the detail panel
                             opacity: card.isCurrent ? (grid.activeFocus ? 1 : 0.35) : 0
 

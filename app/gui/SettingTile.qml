@@ -70,11 +70,14 @@ AbstractButton {
     Keys.onEnterPressed: activate()
     Keys.onMenuPressed: resetToDefault()
 
+    // KaneMode: the focused tile is white, like its settings rows
+    readonly property bool whiteFocus: Theme.whiteFocus && activeFocus
+
     background: Rectangle {
         radius: Theme.radius
-        color: tile.activeFocus ? Theme.raised : (tile.hovered ? Theme.hover : Theme.surface)
+        color: tile.whiteFocus ? Theme.focusFill : tile.activeFocus ? Theme.raised : (tile.hovered ? Theme.hover : Theme.surface)
         border.width: 2
-        border.color: tile.activeFocus ? Theme.accent : "transparent"
+        border.color: tile.activeFocus && !tile.whiteFocus ? Theme.accent : "transparent"
 
         Behavior on color {
             ColorAnimation { duration: Theme.durationFast }
@@ -100,7 +103,7 @@ AbstractButton {
                     font.family: Theme.textFont
                     font.pixelSize: 15
                     font.weight: Font.Bold
-                    color: Theme.text
+                    color: tile.whiteFocus ? Theme.focusText : Theme.text
                     elide: Text.ElideRight
                 }
 
@@ -125,7 +128,7 @@ AbstractButton {
                 text: !tile.isEnabled && catalog.lockReason(tile.setting) !== "" ? catalog.lockReason(tile.setting) : tile.setting.desc
                 font.family: Theme.textFont
                 font.pixelSize: 13
-                color: !tile.isEnabled && tile.activeFocus ? Theme.accent2 : Theme.textSecondary
+                color: tile.whiteFocus ? Theme.focusMuted : !tile.isEnabled && tile.activeFocus ? Theme.accent2 : Theme.textSecondary
                 // The reason a setting is off, and how to turn it on, may take two lines
                 wrapMode: tile.isEnabled ? Text.NoWrap : Text.Wrap
                 maximumLineCount: tile.isEnabled ? 1 : 2
@@ -196,14 +199,14 @@ AbstractButton {
                 font.family: Theme.textFont
                 font.pixelSize: 14
                 font.weight: Font.Bold
-                color: Theme.text
+                color: tile.whiteFocus ? Theme.focusText : Theme.text
             }
 
             KpIcon {
                 anchors.verticalCenter: parent.verticalCenter
                 name: "right"
                 size: 16
-                color: Theme.textTertiary
+                color: tile.whiteFocus ? Theme.focusMuted : Theme.textTertiary
             }
         }
     }

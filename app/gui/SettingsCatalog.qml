@@ -872,7 +872,8 @@ QtObject {
     readonly property var profileSizeKeys: ["autoResolution", "width", "height", "autoFps", "fps", "autoAdjustBitrate", "bitrateKbps"]
 
     // Colors a custom profile can have
-    readonly property var profileColors: ["#FF6A3D", "#FFC857", "#5FD39A", "#5CC8FF", "#9B8CFF", "#FF7AB6"]
+    // KaneMode: one accent color for every profile
+    readonly property var profileColors: Theme.kaneMode ? [Theme.accent] : ["#FF6A3D", "#FFC857", "#5FD39A", "#5CC8FF", "#9B8CFF", "#FF7AB6"]
 
     // Bumped when the custom profiles change, to refresh what depends on them
     property int profilesRevision: 0
@@ -999,7 +1000,7 @@ QtObject {
           matches: function() {
               return StreamingPreferences.autoResolution && StreamingPreferences.autoFps
           } },
-        { key: "quality", icon: "image", label: qsTr("Quality"), color: "#9B8CFF",
+        { key: "quality", icon: "image", label: qsTr("Quality"), color: Theme.kaneMode ? Theme.accent : "#9B8CFF",
           summary: qsTr("1440p · 60 FPS · high bitrate"),
           apply: function() {
               setResolution(2560, 1440, false)
@@ -1012,7 +1013,7 @@ QtObject {
               return !StreamingPreferences.autoResolution && StreamingPreferences.height === 1440 &&
                      !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
           } },
-        { key: "battery", icon: "power", label: qsTr("Battery"), color: "#5FD39A",
+        { key: "battery", icon: "power", label: qsTr("Battery"), color: Theme.kaneMode ? Theme.accent : "#5FD39A",
           summary: qsTr("720p · 60 FPS · light"),
           apply: function() {
               setResolution(1280, 720, false)
@@ -1024,7 +1025,7 @@ QtObject {
               return !StreamingPreferences.autoResolution && StreamingPreferences.height === 720 &&
                      !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
           } },
-        { key: "weaknetwork", icon: "wifi", label: qsTr("Weak network"), color: "#5CC8FF",
+        { key: "weaknetwork", icon: "wifi", label: qsTr("Weak network"), color: Theme.kaneMode ? Theme.accent : "#5CC8FF",
           summary: qsTr("720p · 30 FPS · low bitrate"),
           apply: function() {
               setResolution(1280, 720, false)
