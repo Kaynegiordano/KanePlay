@@ -599,7 +599,7 @@ QtObject {
             {
                 key: "muteOnFocusLoss", category: "audio", icon: "volume", type: "bool",
                 label: qsTr("Mute in the background"),
-                desc: qsTr("When KanePlay isn't the active window"),
+                desc: qsTr("When %1 isn't the active window").arg(appName),
                 available: function() { return SystemProperties.hasDesktopEnvironment },
                 get: function() { return StreamingPreferences.muteOnFocusLoss },
                 set: function(value) { StreamingPreferences.muteOnFocusLoss = value },
@@ -641,7 +641,7 @@ QtObject {
             {
                 key: "backgroundGamepad", category: "gamepad", icon: "gamepad", type: "bool",
                 label: qsTr("Gamepad in the background"),
-                desc: qsTr("Works even when KanePlay isn't focused"),
+                desc: qsTr("Works even when %1 isn't focused").arg(appName),
                 available: function() { return SystemProperties.hasDesktopEnvironment },
                 get: function() { return StreamingPreferences.backgroundGamepad },
                 set: function(value) { StreamingPreferences.backgroundGamepad = value },
@@ -772,15 +772,15 @@ QtObject {
             {
                 key: "startupIntro", category: "system", icon: "play", type: "bool",
                 label: qsTr("Startup intro"),
-                desc: qsTr("Plays when KanePlay opens · any button skips it"),
+                desc: qsTr("Plays when %1 opens · any button skips it").arg(appName),
                 get: function() { return StreamingPreferences.startupIntro },
                 set: function(value) { StreamingPreferences.startupIntro = value },
                 def: function() { return true }
             },
             {
                 key: "uiDisplayMode", category: "system", icon: "monitor", type: "choice",
-                label: qsTr("KanePlay window"),
-                desc: qsTr("How KanePlay opens"),
+                label: qsTr("%1 window").arg(appName),
+                desc: qsTr("How %1 opens").arg(appName),
                 available: function() { return SystemProperties.hasDesktopEnvironment },
                 options: function() {
                     return [

@@ -21,7 +21,8 @@ ApplicationWindow {
 
     id: window
     // Embedded in KaneMode: part of KaneMode (whose own window is titled "KaneMode")
-    title: embedded ? "KaneMode · KanePlay" : "KanePlay"
+    // Embedded: KaneMode finds this window by its title (native/KaneMode.App, ui/js/pages/game.js)
+    title: embedded ? "KaneMode · Streaming" : "KanePlay"
     width: 1280
     height: 720
 
@@ -482,7 +483,7 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 // Hidden on narrow windows so the tabs keep their room
                 visible: toolBar.width > 960
-                text: "KanePlay"
+                text: embedded ? qsTr("Local streaming") : "KanePlay"
                 font.family: Theme.displayFont
                 font.pixelSize: 19
                 font.weight: Font.Bold
@@ -715,8 +716,8 @@ ApplicationWindow {
 
     ErrorMessageDialog {
         id: noHwDecoderDialog
-        text: qsTr("No functioning hardware accelerated video decoder was detected by KanePlay. " +
-                   "Your streaming performance may be severely degraded in this configuration.")
+        text: qsTr("No functioning hardware accelerated video decoder was detected by %1. " +
+                   "Your streaming performance may be severely degraded in this configuration.").arg(appName)
         helpText: qsTr("Click the Help button for more information on solving this problem.")
         helpUrl: "https://github.com/moonlight-stream/moonlight-docs/wiki/Fixing-Hardware-Decoding-Problems"
     }
@@ -741,7 +742,7 @@ ApplicationWindow {
     ErrorMessageDialog {
         id: unmappedGamepadDialog
         property string unmappedGamepads : ""
-        text: qsTr("KanePlay detected gamepads without a mapping:") + "\n" + unmappedGamepads
+        text: qsTr("%1 detected gamepads without a mapping:").arg(appName) + "\n" + unmappedGamepads
         helpTextSeparator: "\n\n"
         helpText: qsTr("Click the Help button for information on how to map your gamepads.")
         helpUrl: "https://github.com/moonlight-stream/moonlight-docs/wiki/Gamepad-Mapping"

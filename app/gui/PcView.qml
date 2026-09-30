@@ -252,7 +252,7 @@ FocusScope {
             errorDialog.text = qsTr("Unable to connect to the specified PC.")
 
             if (detectedPortBlocking) {
-                errorDialog.text += "\n\n" + qsTr("This PC's Internet connection is blocking KanePlay. Streaming over the Internet may not work while connected to this network.")
+                errorDialog.text += "\n\n" + qsTr("This PC's Internet connection is blocking %1. Streaming over the Internet may not work while connected to this network.").arg(appName)
             }
             else {
                 errorDialog.helpText = qsTr("Click the Help button for possible solutions.")
@@ -336,7 +336,7 @@ FocusScope {
 
                 Text {
                     Layout.fillWidth: true
-                    text: qsTr("Welcome to KanePlay")
+                    text: embedded ? qsTr("Welcome to local streaming") : qsTr("Welcome to KanePlay")
                     font.family: Theme.displayFont
                     font.pixelSize: 42
                     font.weight: Font.Bold
@@ -734,7 +734,7 @@ FocusScope {
                             id: hintText
                             Layout.fillWidth: true
                             text: pc === null ? "" :
-                                  !pc.online ? (pc.wakeable ? qsTr("This PC is asleep or turned off. KanePlay can wake it up if it is plugged into the network.")
+                                  !pc.online ? (pc.wakeable ? qsTr("This PC is asleep or turned off. %1 can wake it up if it is plugged into the network.").arg(appName)
                                                             : qsTr("This PC is offline. Turn it on, then wait for it to show up here.")) :
                                   qsTr("Pair this PC once to play on it: a code to enter in Sunshine will be shown.")
                             font.pixelSize: 15
@@ -1165,7 +1165,7 @@ FocusScope {
         standardButtons: Dialog.Ok
 
         onAboutToShow: {
-            testConnectionDialog.text = qsTr("KanePlay is testing your network connection to determine if any required ports are blocked.") + "\n\n" + qsTr("This may take a few seconds…")
+            testConnectionDialog.text = qsTr("%1 is testing your network connection to determine if any required ports are blocked.").arg(appName) + "\n\n" + qsTr("This may take a few seconds…")
             showSpinner = true
         }
 
@@ -1176,11 +1176,11 @@ FocusScope {
                 imageSrc = "qrc:/res/baseline-warning-24px.svg"
             }
             else if (result === 0) {
-                text = qsTr("This network does not appear to be blocking KanePlay. If you still have trouble connecting, check your PC's firewall settings.")
+                text = qsTr("This network does not appear to be blocking %1. If you still have trouble connecting, check your PC's firewall settings.").arg(appName)
                 imageSrc = "qrc:/res/baseline-check_circle_outline-24px.svg"
             }
             else {
-                text = qsTr("Your PC's current network connection seems to be blocking KanePlay. Streaming over the Internet may not work while connected to this network.") + "\n\n" + qsTr("The following network ports were blocked:") + "\n"
+                text = qsTr("Your PC's current network connection seems to be blocking %1. Streaming over the Internet may not work while connected to this network.").arg(appName) + "\n\n" + qsTr("The following network ports were blocked:") + "\n"
                 text += blockedPorts
                 imageSrc = "qrc:/res/baseline-error_outline-24px.svg"
             }

@@ -53,7 +53,7 @@ FocusScope {
         else {
             UiSound.play("error")
             errorText = detectedPortBlocking ?
-                        qsTr("This network is blocking KanePlay. Streaming over the Internet may not work from here.") :
+                        qsTr("This network is blocking %1. Streaming over the Internet may not work from here.").arg(appName) :
                         qsTr("No PC answered at this address. Check that it is on, that Sunshine runs on it, and the address.")
         }
     }

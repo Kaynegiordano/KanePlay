@@ -154,7 +154,7 @@ void KaneModeBridge::openInKaneMode(const QString& panel)
 void KaneModeBridge::returnToKaneMode()
 {
 #ifdef Q_OS_WIN32
-    // KaneMode's window is titled exactly "KaneMode" (ours is "KaneMode · KanePlay")
+    // KaneMode's window is titled exactly "KaneMode" (ours is "KaneMode · Streaming")
     HWND kaneMode = findKaneMode();
     if (kaneMode != nullptr) {
         if (IsIconic(kaneMode)) {

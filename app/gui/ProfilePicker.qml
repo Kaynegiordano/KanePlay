@@ -30,7 +30,7 @@ Popup {
             list.push({ type: "title", text: qsTr("My profiles") })
             custom.forEach(function(profile) { list.push({ type: "profile", profile: profile }) })
         }
-        list.push({ type: "title", text: qsTr("KanePlay profiles") })
+        list.push({ type: "title", text: qsTr("%1 profiles").arg(embedded ? qsTr("Streaming") : "KanePlay") })
         profiles.filter(function(profile) { return profile.custom !== true })
                 .forEach(function(profile) { list.push({ type: "profile", profile: profile }) })
         list.push({ type: "create" })

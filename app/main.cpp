@@ -1246,6 +1246,9 @@ int main(int argc, char *argv[])
         // Embedded in KaneMode: KaneMode shows the PCs, pairing and apps itself, so pairing
         // and quitting run without a window and a stream starts on a plain black screen
         engine.rootContext()->setContextProperty("embedded", qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"));
+        // Name of the app in sentences ("This network is blocking %1"): inside KaneMode, the streaming
+        // screens are part of KaneMode ("Local streaming"), so KanePlay is not named there
+        engine.rootContext()->setContextProperty("appName", QStringLiteral("%1").arg(qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") ? "KaneMode" : "KanePlay"));
         engine.rootContext()->setContextProperty("kaneMode", kaneModeBridge);
 
         // Load the main.qml file

@@ -6,6 +6,7 @@
 
 #include <QSettings>
 #include <QTranslator>
+#include <QRegularExpression>
 #include <QCoreApplication>
 #include <QLocale>
 #include <QReadWriteLock>
@@ -268,6 +269,11 @@ bool StreamingPreferences::retranslate()
 
     QTranslator* newTranslator = new QTranslator();
     QString languageSuffix = getSuffixFromLanguage(language);
+    // Embedded in KaneMode: the language chosen in KaneMode (qml_<suffix>, e.g. "ja", "zh_CN")
+    QString kaneModeLanguage = qEnvironmentVariable("KANEMODE_LANG");
+    if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") && QRegularExpression("^[a-z]{2}(_[A-Z]{2})?$").match(kaneModeLanguage).hasMatch()) {
+        languageSuffix = kaneModeLanguage;
+    }
 
     // Remove the old translator, even if we can't load a new one.
     // Otherwise we'll be stuck with the old translated values instead
