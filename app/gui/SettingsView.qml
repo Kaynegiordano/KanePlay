@@ -123,9 +123,9 @@ FocusScope {
 
         background: Rectangle {
             radius: Theme.kaneMode ? Theme.radiusLarge : 22
-            color: bar.whiteFocus ? Theme.focusFill : bar.hovered || bar.activeFocus ? Theme.raised : Theme.surface
+            color: bar.whiteFocus ? Theme.tileFill : bar.hovered || bar.activeFocus ? Theme.raised : Theme.surface
             border.width: 2
-            border.color: bar.whiteFocus ? Theme.focusFill : bar.activeFocus ? bar.tint : Qt.rgba(bar.tint.r, bar.tint.g, bar.tint.b, 0.35)
+            border.color: bar.whiteFocus ? Theme.tileFill : bar.activeFocus ? bar.tint : Qt.rgba(bar.tint.r, bar.tint.g, bar.tint.b, 0.35)
 
             Behavior on color {
                 ColorAnimation { duration: Theme.durationStandard }
@@ -202,13 +202,13 @@ FocusScope {
                 font.family: Theme.textFont
                 font.pixelSize: 15
                 font.weight: Font.Bold
-                color: bar.whiteFocus ? Theme.focusText : bar.activeFocus ? Theme.text : Theme.textSecondary
+                color: bar.whiteFocus ? Theme.tileText : bar.activeFocus ? Theme.text : Theme.textSecondary
             }
 
             KpIcon {
                 name: "chevron"
                 size: 20
-                color: bar.whiteFocus ? Theme.focusMuted : bar.activeFocus ? bar.tint : Theme.textSecondary
+                color: bar.whiteFocus ? Theme.tileMuted : bar.activeFocus ? bar.tint : Theme.textSecondary
             }
         }
     }
@@ -249,7 +249,7 @@ FocusScope {
 
         background: Rectangle {
             radius: Theme.kaneMode ? Theme.radiusLarge : 20
-            color: valueTile.whiteFocus ? Theme.focusFill : valueTile.activeFocus ? Theme.raised : (valueTile.hovered ? Theme.hover : Theme.surface)
+            color: valueTile.whiteFocus ? Theme.tileFill : valueTile.activeFocus ? Theme.raised : (valueTile.hovered ? Theme.hover : Theme.surface)
             border.width: 2
             border.color: valueTile.activeFocus && !valueTile.whiteFocus ? Theme.accent : "transparent"
 
@@ -267,7 +267,7 @@ FocusScope {
                 KpIcon {
                     name: valueTile.iconName
                     size: 18
-                    color: valueTile.whiteFocus ? Theme.focusMuted : Theme.textSecondary
+                    color: valueTile.whiteFocus ? Theme.tileMuted : Theme.textSecondary
                 }
 
                 Text {
@@ -277,7 +277,7 @@ FocusScope {
                     font.pixelSize: 12
                     font.weight: Font.Bold
                     font.letterSpacing: 0.9
-                    color: valueTile.whiteFocus ? Theme.focusMuted : Theme.textSecondary
+                    color: valueTile.whiteFocus ? Theme.tileMuted : Theme.textSecondary
                     elide: Text.ElideRight
                 }
             }
@@ -289,7 +289,7 @@ FocusScope {
                 font.pixelSize: 24
                 font.weight: Font.DemiBold
                 font.letterSpacing: -0.5
-                color: valueTile.whiteFocus ? Theme.focusText : Theme.text
+                color: valueTile.whiteFocus ? Theme.tileText : Theme.text
                 fontSizeMode: Text.HorizontalFit
                 minimumPixelSize: 16
                 elide: Text.ElideRight

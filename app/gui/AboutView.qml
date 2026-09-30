@@ -259,7 +259,7 @@ FocusScope {
                         background: Rectangle {
                             radius: 12
                             // KaneMode: white when selected with the gamepad, dark text
-                            color: Theme.whiteFocus && licenseRow.activeFocus ? Theme.focusFill : licenseRow.activeFocus ? Theme.raised : (licenseRow.hovered ? Theme.hover : "transparent")
+                            color: Theme.whiteFocus && licenseRow.activeFocus ? Theme.tileFill : licenseRow.activeFocus ? Theme.raised : (licenseRow.hovered ? Theme.hover : "transparent")
                             border.width: licenseRow.activeFocus && !Theme.whiteFocus ? 2 : 0
                             border.color: Theme.accent
                         }
@@ -272,7 +272,7 @@ FocusScope {
                                 text: modelData.name
                                 font.pixelSize: 15
                                 font.weight: Font.DemiBold
-                                color: Theme.whiteFocus && licenseRow.activeFocus ? Theme.focusText : Theme.text
+                                color: Theme.whiteFocus && licenseRow.activeFocus ? Theme.tileText : Theme.text
                                 elide: Text.ElideRight
                             }
 

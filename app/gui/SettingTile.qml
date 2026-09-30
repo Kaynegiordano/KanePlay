@@ -75,7 +75,7 @@ AbstractButton {
 
     background: Rectangle {
         radius: Theme.radius
-        color: tile.whiteFocus ? Theme.focusFill : tile.activeFocus ? Theme.raised : (tile.hovered ? Theme.hover : Theme.surface)
+        color: tile.whiteFocus ? Theme.tileFill : tile.activeFocus ? Theme.raised : (tile.hovered ? Theme.hover : Theme.surface)
         border.width: 2
         border.color: tile.activeFocus && !tile.whiteFocus ? Theme.accent : "transparent"
 
@@ -103,7 +103,7 @@ AbstractButton {
                     font.family: Theme.textFont
                     font.pixelSize: 15
                     font.weight: Font.Bold
-                    color: tile.whiteFocus ? Theme.focusText : Theme.text
+                    color: tile.whiteFocus ? Theme.tileText : Theme.text
                     elide: Text.ElideRight
                 }
 
@@ -128,7 +128,7 @@ AbstractButton {
                 text: !tile.isEnabled && catalog.lockReason(tile.setting) !== "" ? catalog.lockReason(tile.setting) : tile.setting.desc
                 font.family: Theme.textFont
                 font.pixelSize: 13
-                color: tile.whiteFocus ? Theme.focusMuted : !tile.isEnabled && tile.activeFocus ? Theme.accent2 : Theme.textSecondary
+                color: tile.whiteFocus ? Theme.tileMuted : !tile.isEnabled && tile.activeFocus ? Theme.accent2 : Theme.textSecondary
                 // The reason a setting is off, and how to turn it on, may take two lines
                 wrapMode: tile.isEnabled ? Text.NoWrap : Text.Wrap
                 maximumLineCount: tile.isEnabled ? 1 : 2
@@ -199,14 +199,14 @@ AbstractButton {
                 font.family: Theme.textFont
                 font.pixelSize: 14
                 font.weight: Font.Bold
-                color: tile.whiteFocus ? Theme.focusText : Theme.text
+                color: tile.whiteFocus ? Theme.tileText : Theme.text
             }
 
             KpIcon {
                 anchors.verticalCenter: parent.verticalCenter
                 name: "right"
                 size: 16
-                color: tile.whiteFocus ? Theme.focusMuted : Theme.textTertiary
+                color: tile.whiteFocus ? Theme.tileMuted : Theme.textTertiary
             }
         }
     }

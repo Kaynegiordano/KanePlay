@@ -201,7 +201,7 @@ Popup {
 
                     background: Rectangle {
                         radius: Theme.kaneMode ? Theme.radius : 14
-                        color: option.whiteFocus ? Theme.focusFill : option.ListView.isCurrentItem && choiceList.activeFocus ? Theme.raised :
+                        color: option.whiteFocus ? Theme.tileFill : option.ListView.isCurrentItem && choiceList.activeFocus ? Theme.raised :
                                option.hovered ? Theme.hover : "transparent"
                         border.width: option.ListView.isCurrentItem && choiceList.activeFocus && !option.whiteFocus ? 2 : 0
                         border.color: Theme.accent
@@ -238,7 +238,7 @@ Popup {
                             font.family: Theme.textFont
                             font.pixelSize: 16
                             font.weight: option.chosen ? Font.Bold : Font.DemiBold
-                            color: option.whiteFocus ? Theme.focusText : Theme.text
+                            color: option.whiteFocus ? Theme.tileText : Theme.text
                             elide: Text.ElideRight
                         }
                     }

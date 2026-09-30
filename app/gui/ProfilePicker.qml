@@ -207,7 +207,7 @@ Popup {
                     anchors.fill: parent
                     radius: 16
                     color: row.deleting ? Qt.rgba(1, 0.48, 0.44, 0.14) :
-                           row.whiteFocus ? Theme.focusFill :
+                           row.whiteFocus ? Theme.tileFill :
                            row.current ? Theme.raised : (mouseArea.containsMouse ? Theme.hover : "transparent")
                     border.width: row.current && !row.whiteFocus ? 2 : 0
                     border.color: row.deleting ? Theme.danger : row.tint
@@ -257,7 +257,7 @@ Popup {
                                 font.family: Theme.textFont
                                 font.pixelSize: 16
                                 font.weight: Font.Bold
-                                color: row.deleting ? Theme.danger : row.whiteFocus ? Theme.focusText : Theme.text
+                                color: row.deleting ? Theme.danger : row.whiteFocus ? Theme.tileText : Theme.text
                                 elide: Text.ElideRight
                             }
 
@@ -268,7 +268,7 @@ Popup {
                                       row.deleting ? qsTr("A to delete, B to keep it") : row.entry.profile.summary
                                 font.family: Theme.textFont
                                 font.pixelSize: 13
-                                color: row.whiteFocus ? Theme.focusMuted : Theme.textSecondary
+                                color: row.whiteFocus ? Theme.tileMuted : Theme.textSecondary
                                 elide: Text.ElideRight
                             }
                         }

@@ -58,6 +58,11 @@ QtObject {
     readonly property color focusFill: "#FFFFFF"
     readonly property color focusText: "#111111"
     readonly property color focusMuted: "#555555"
+    // Tiles (settings, PC list, profiles, choices) only lift by about a fifth of the white, with
+    // the usual light text: a full white fill was too bright on large surfaces
+    readonly property color tileFill: Qt.tint(surface, Qt.rgba(1, 1, 1, 0.2))
+    readonly property color tileText: text
+    readonly property color tileMuted: textSecondary
     readonly property real focusScale: kaneMode && motion ? 1.04 : 1
 
     readonly property int pagePadding: 40

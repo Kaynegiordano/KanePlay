@@ -977,7 +977,7 @@ FocusScope {
 
                     background: Rectangle {
                         radius: Theme.radius
-                        color: pcRow.whiteFocus ? Theme.focusFill : pcRow.isCurrent ? Theme.raised : (pcRow.hovered ? Theme.hover : Theme.surface)
+                        color: pcRow.whiteFocus ? Theme.tileFill : pcRow.isCurrent ? Theme.raised : (pcRow.hovered ? Theme.hover : Theme.surface)
                         border.width: 2
                         border.color: pcRow.whiteFocus ? "transparent" : pcRow.isCurrent && pcList.activeFocus ? Theme.accent :
                                       pcRow.isCurrent ? Theme.border : "transparent"
@@ -1024,7 +1024,7 @@ FocusScope {
                                 text: pcRow.pcName
                                 font.pixelSize: 16
                                 font.weight: Font.Bold
-                                color: pcRow.whiteFocus ? Theme.focusText : pcRow.online ? Theme.text : Theme.textSecondary
+                                color: pcRow.whiteFocus ? Theme.tileText : pcRow.online ? Theme.text : Theme.textSecondary
                                 elide: Text.ElideRight
                             }
 
@@ -1042,7 +1042,7 @@ FocusScope {
                                 Text {
                                     text: statusText(pcRow)
                                     font.pixelSize: 13
-                                    color: pcRow.whiteFocus ? Theme.focusMuted : Theme.textSecondary
+                                    color: pcRow.whiteFocus ? Theme.tileMuted : Theme.textSecondary
                                 }
                             }
                         }
