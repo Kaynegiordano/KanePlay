@@ -182,6 +182,15 @@ void StreamingPreferences::reload()
     gameOptimizations = settings.value(SER_GAMEOPTS, true).toBool();
     playAudioOnHost = settings.value(SER_HOSTAUDIO, false).toBool();
     multiController = settings.value(SER_MULTICONT, true).toBool();
+    // Embedded in KaneMode (a handheld): every local gamepad plays as player 1, so the host gets
+    // exactly one virtual controller. With one per local gamepad, the host sometimes ended up with
+    // several (the handheld's gamepad seen more than once, Steam's virtual gamepads...). Applied
+    // once; the setting is the user's again afterwards.
+    if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") && !settings.value("kanemodesinglecontroller", false).toBool()) {
+        multiController = false;
+        settings.setValue(SER_MULTICONT, false);
+        settings.setValue("kanemodesinglecontroller", true);
+    }
     enableMdns = settings.value(SER_MDNS, true).toBool();
     quitAppAfter = settings.value(SER_QUITAPPAFTER, false).toBool();
     absoluteMouseMode = settings.value(SER_ABSMOUSEMODE, false).toBool();
