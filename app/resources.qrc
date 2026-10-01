@@ -25,6 +25,26 @@
         <file>res/licenses/LGPL-3.0.txt</file>
         <file>res/licenses/LGPL-2.1.txt</file>
         <file>res/licenses/Apache-2.0.txt</file>
+        <file>res/sounds/retro/move.wav</file>
+        <file>res/sounds/retro/select.wav</file>
+        <file>res/sounds/retro/back.wav</file>
+        <file>res/sounds/retro/tab.wav</file>
+        <file>res/sounds/retro/on.wav</file>
+        <file>res/sounds/retro/off.wav</file>
+        <file>res/sounds/retro/launch.wav</file>
+        <file>res/sounds/retro/connected.wav</file>
+        <file>res/sounds/retro/notify.wav</file>
+        <file>res/sounds/retro/error.wav</file>
+        <file>res/sounds/soft/move.wav</file>
+        <file>res/sounds/soft/select.wav</file>
+        <file>res/sounds/soft/back.wav</file>
+        <file>res/sounds/soft/tab.wav</file>
+        <file>res/sounds/soft/on.wav</file>
+        <file>res/sounds/soft/off.wav</file>
+        <file>res/sounds/soft/launch.wav</file>
+        <file>res/sounds/soft/connected.wav</file>
+        <file>res/sounds/soft/notify.wav</file>
+        <file>res/sounds/soft/error.wav</file>
         <file>res/sounds/move.wav</file>
         <file>res/sounds/select.wav</file>
         <file>res/sounds/back.wav</file>

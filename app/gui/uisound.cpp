@@ -33,33 +33,36 @@ UiSound::UiSound(StreamingPreferences* prefs)
 {
     SDL_zero(m_Spec);
 
-    for (const char* name : k_SoundNames) {
-        QFile file(QString(":/res/sounds/%1.wav").arg(name));
-        if (!file.open(QIODevice::ReadOnly)) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Missing UI sound: %s", name);
-            continue;
-        }
+    for (const QString& profile : {QStringLiteral("round"), QStringLiteral("retro"), QStringLiteral("soft")}) {
+        for (const char* name : k_SoundNames) {
+            const QString key = profile == QStringLiteral("round") ? QString::fromLatin1(name) : profile + QLatin1Char('/') + QString::fromLatin1(name);
+            QFile file(QString(":/res/sounds/%1.wav").arg(key));
+            if (!file.open(QIODevice::ReadOnly)) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Missing UI sound: %s", name);
+                continue;
+            }
 
-        QByteArray wav = file.readAll();
-        SDL_AudioSpec spec;
-        Uint8* buffer;
-        Uint32 length;
-        if (SDL_LoadWAV_RW(SDL_RWFromConstMem(wav.constData(), wav.size()), 1, &spec, &buffer, &length) == nullptr) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Unable to load UI sound %s: %s", name, SDL_GetError());
-            continue;
-        }
+            QByteArray wav = file.readAll();
+            SDL_AudioSpec spec;
+            Uint8* buffer;
+            Uint32 length;
+            if (SDL_LoadWAV_RW(SDL_RWFromConstMem(wav.constData(), wav.size()), 1, &spec, &buffer, &length) == nullptr) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Unable to load UI sound %s: %s", name, SDL_GetError());
+                continue;
+            }
 
-        // All the sounds share one format, the device is opened with it
-        if (m_Spec.freq == 0) {
-            m_Spec = spec;
+            // All the sounds share one format, the device is opened with it
+            if (m_Spec.freq == 0) {
+                m_Spec = spec;
+            }
+            if (spec.freq == m_Spec.freq && spec.format == m_Spec.format && spec.channels == m_Spec.channels) {
+                m_Sounds.insert(key, QByteArray((const char*)buffer, (int)length));
+            }
+            else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "UI sound %s has a different format", name);
+            }
+            SDL_FreeWAV(buffer);
         }
-        if (spec.freq == m_Spec.freq && spec.format == m_Spec.format && spec.channels == m_Spec.channels) {
-            m_Sounds.insert(name, QByteArray((const char*)buffer, (int)length));
-        }
-        else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "UI sound %s has a different format", name);
-        }
-        SDL_FreeWAV(buffer);
     }
 
     m_IdleTimer.setSingleShot(true);
@@ -114,7 +117,17 @@ void UiSound::play(const QString& name)
         return;
     }
 
-    auto sound = m_Sounds.constFind(name);
+    // Les préférences du lanceur restent distinctes du son Windows et du flux du jeu.
+    const bool embedded = qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED");
+    if (embedded && (qEnvironmentVariable("KANEMODE_SOUNDS") == QStringLiteral("0") ||
+        (name == QStringLiteral("move") && qEnvironmentVariable("KANEMODE_SOUND_MOVES") == QStringLiteral("0")))) return;
+    bool validVolume = false;
+    const int launcherVolume = embedded ? qEnvironmentVariable("KANEMODE_SOUND_VOLUME").toInt(&validVolume) : 100;
+    const int volume = m_Prefs->uiSoundVolume * (validVolume ? qBound(0, launcherVolume, 100) : 100) / 100;
+    if (volume <= 0) return;
+    const QString profile = embedded ? qEnvironmentVariable("KANEMODE_SOUND_THEME") : QString();
+    const QString key = profile == QStringLiteral("retro") || profile == QStringLiteral("soft") ? profile + QLatin1Char('/') + name : name;
+    auto sound = m_Sounds.constFind(key);
     if (sound == m_Sounds.constEnd() || !openDevice()) {
         return;
     }
@@ -128,7 +141,7 @@ void UiSound::play(const QString& name)
 
     QByteArray mixed(sound->size(), 0);
     SDL_MixAudioFormat((Uint8*)mixed.data(), (const Uint8*)sound->constData(), m_Spec.format,
-                       (Uint32)sound->size(), m_Prefs->uiSoundVolume * SDL_MIX_MAXVOLUME / 100);
+                       (Uint32)sound->size(), volume * SDL_MIX_MAXVOLUME / 100);
 
     SDL_ClearQueuedAudio(m_Device);
     SDL_QueueAudio(m_Device, mixed.constData(), (Uint32)mixed.size());

@@ -1,6 +1,8 @@
 #include "kanemodebridge.h"
 
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QGuiApplication>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -65,7 +67,11 @@ bool KaneModeBridge::forwardToRunningInstance()
     // We were started by KaneMode, in the foreground: let the running KanePlay take it
     AllowSetForegroundWindow(ASFW_ANY);
 #endif
-    socket.write(command().toUtf8());
+    QJsonObject preferences;
+    for (const char* key : {"KANEMODE_SOUNDS", "KANEMODE_SOUND_THEME", "KANEMODE_SOUND_VOLUME", "KANEMODE_SOUND_MOVES"})
+        if (qEnvironmentVariableIsSet(key)) preferences.insert(QString::fromLatin1(key), qEnvironmentVariable(key));
+    QJsonObject message; message.insert(QStringLiteral("command"), command()); message.insert(QStringLiteral("preferences"), preferences);
+    socket.write(QJsonDocument(message).toJson(QJsonDocument::Compact) + '\n');
     socket.flush();
     socket.waitForBytesWritten(1000);
     socket.disconnectFromServer();
@@ -83,10 +89,18 @@ void KaneModeBridge::listen()
 
     connect(m_Server, &QLocalServer::newConnection, this, [this]() {
         while (QLocalSocket* socket = m_Server->nextPendingConnection()) {
-            connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-            connect(socket, &QLocalSocket::readyRead, this, [this, socket]() {
-                handle(QString::fromUtf8(socket->readAll()));
-            });
+            const auto read = [this, socket](bool closed) {
+                QByteArray buffer = socket->property("commandBuffer").toByteArray() + socket->readAll();
+                int newline;
+                while ((newline = buffer.indexOf('\n')) >= 0) {
+                    handle(QString::fromUtf8(buffer.left(newline))); buffer.remove(0, newline + 1);
+                }
+                if (closed && !buffer.isEmpty()) { handle(QString::fromUtf8(buffer)); buffer.clear(); }
+                socket->setProperty("commandBuffer", buffer);
+            };
+            connect(socket, &QLocalSocket::disconnected, this, [socket, read]() { read(true); socket->deleteLater(); });
+            connect(socket, &QLocalSocket::readyRead, this, [read]() { read(false); });
+            if (socket->bytesAvailable() > 0) read(false);
         }
     });
 
@@ -97,7 +111,18 @@ void KaneModeBridge::listen()
 
 void KaneModeBridge::handle(const QString& command)
 {
-    QStringList parts = command.trimmed().split('\t');
+    QString resolved = command;
+    if (command.trimmed().startsWith(QLatin1Char('{'))) {
+        const QJsonObject message = QJsonDocument::fromJson(command.toUtf8()).object();
+        if (!message.value(QStringLiteral("command")).isString()) return;
+        resolved = message.value(QStringLiteral("command")).toString();
+        const QJsonObject preferences = message.value(QStringLiteral("preferences")).toObject();
+        for (const char* key : {"KANEMODE_SOUNDS", "KANEMODE_SOUND_THEME", "KANEMODE_SOUND_VOLUME", "KANEMODE_SOUND_MOVES"}) {
+            const auto value = preferences.value(QString::fromLatin1(key));
+            if (value.isString()) qputenv(key, value.toString().toUtf8());
+        }
+    }
+    QStringList parts = resolved.trimmed().split('\t');
     if (parts.value(0) == QStringLiteral("stream") && parts.size() >= 3) {
         emit launchRequested(parts.value(1), parts.value(2).toInt(), parts.value(3));
     }
