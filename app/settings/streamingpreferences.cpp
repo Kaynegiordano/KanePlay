@@ -232,6 +232,9 @@ void StreamingPreferences::reload()
                                                                                                                  : UIDisplayMode::UI_MAXIMIZED)).toInt());
     language = static_cast<Language>(settings.value(SER_LANGUAGE,
                                                     static_cast<int>(Language::LANG_AUTO)).toInt());
+    if (language != LANG_AUTO && language != LANG_EN && language != LANG_FR) {
+        language = LANG_AUTO;
+    }
 
 
     // Perform default settings updates as required based on last default version
@@ -269,9 +272,9 @@ bool StreamingPreferences::retranslate()
 
     QTranslator* newTranslator = new QTranslator();
     QString languageSuffix = getSuffixFromLanguage(language);
-    // Embedded in KaneMode: the language chosen in KaneMode (qml_<suffix>, e.g. "ja", "zh_CN")
+    // Mode intégré : seulement le français et l’anglais choisis dans KaneMode.
     QString kaneModeLanguage = qEnvironmentVariable("KANEMODE_LANG");
-    if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") && QRegularExpression("^[a-z]{2}(_[A-Z]{2})?$").match(kaneModeLanguage).hasMatch()) {
+    if (qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") && (kaneModeLanguage == "fr" || kaneModeLanguage == "en")) {
         languageSuffix = kaneModeLanguage;
     }
 
@@ -317,71 +320,13 @@ QString StreamingPreferences::getSuffixFromLanguage(StreamingPreferences::Langua
 {
     switch (lang)
     {
-    case LANG_DE:
-        return "de";
     case LANG_EN:
         return "en";
     case LANG_FR:
         return "fr";
-    case LANG_ZH_CN:
-        return "zh_CN";
-    case LANG_NB_NO:
-        return "nb_NO";
-    case LANG_RU:
-        return "ru";
-    case LANG_ES:
-        return "es";
-    case LANG_JA:
-        return "ja";
-    case LANG_VI:
-        return "vi";
-    case LANG_TH:
-        return "th";
-    case LANG_KO:
-        return "ko";
-    case LANG_HU:
-        return "hu";
-    case LANG_NL:
-        return "nl";
-    case LANG_SV:
-        return "sv";
-    case LANG_TR:
-        return "tr";
-    case LANG_UK:
-        return "uk";
-    case LANG_ZH_TW:
-        return "zh_TW";
-    case LANG_PT:
-        return "pt";
-    case LANG_PT_BR:
-        return "pt_BR";
-    case LANG_EL:
-        return "el";
-    case LANG_IT:
-        return "it";
-    case LANG_HI:
-        return "hi";
-    case LANG_PL:
-        return "pl";
-    case LANG_CS:
-        return "cs";
-    case LANG_HE:
-        return "he";
-    case LANG_CKB:
-        return "ckb";
-    case LANG_LT:
-        return "lt";
-    case LANG_ET:
-        return "et";
-    case LANG_BG:
-        return "bg";
-    case LANG_EO:
-        return "eo";
-    case LANG_TA:
-        return "ta";
     case LANG_AUTO:
     default:
-        return QLocale::system().name();
+        return QLocale::system().language() == QLocale::French ? "fr" : "en";
     }
 }
 
