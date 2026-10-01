@@ -176,8 +176,16 @@ ApplicationWindow {
             // Hardware acceleration and unmapped gamepads are checked asynchronously
             SystemProperties.hasHardwareAccelerationChanged.connect(hasHardwareAccelerationChanged)
             SystemProperties.unmappedGamepadsChanged.connect(hasUnmappedGamepadsChanged)
-            SystemProperties.startAsyncLoad()
+            if (embedded) capabilityTimer.start()
+            else SystemProperties.startAsyncLoad()
         }
+    }
+
+    // L'écran des PC apparaît avant l'énumération des manettes et le test des décodeurs.
+    Timer {
+        id: capabilityTimer
+        interval: 180
+        onTriggered: SystemProperties.startAsyncLoad()
     }
 
     function hasHardwareAccelerationChanged() {

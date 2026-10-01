@@ -849,7 +849,7 @@ int main(int argc, char *argv[])
     // We keep the video subsystem initialized on Windows because it's
     // much more costly to reinitialize than other platforms. It hurts
     // the settings page transition performance significantly.
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+    if (!qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "SDL_InitSubSystem(SDL_INIT_VIDEO) failed: %s",
                      SDL_GetError());
@@ -920,6 +920,9 @@ int main(int argc, char *argv[])
     }
 
     QGuiApplication app(argc, argv);
+    // Transmettre une relance avant les traductions, les polices et les objets de l'interface.
+    if (argc <= 1 && qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") &&
+        KaneModeBridge::forwardToRunningInstance()) return 0;
 
 #ifdef Q_OS_DARWIN
     // macOS defaults "Keyboard navigation" to text fields and lists only, which
@@ -1097,9 +1100,6 @@ int main(int argc, char *argv[])
     bool embeddedGui = qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") &&
                        commandLineParserResult == GlobalCommandLineParser::NormalStartRequested;
     if (embeddedGui) {
-        if (KaneModeBridge::forwardToRunningInstance()) {
-            return 0;
-        }
         QString icon = qEnvironmentVariable("KANEMODE_ICON");
         if (!icon.isEmpty() && QFile::exists(icon)) {
             app.setWindowIcon(QIcon(icon));

@@ -153,6 +153,8 @@ void KaneModeBridge::openInKaneMode(const QString& panel)
 
 void KaneModeBridge::returnToKaneMode()
 {
+    // Une relance doit démarrer un nouveau moteur dès que celui-ci commence à se fermer.
+    if (m_Server != nullptr) m_Server->close();
 #ifdef Q_OS_WIN32
     // KaneMode's window is titled exactly "KaneMode" (ours is "KaneMode · Streaming")
     HWND kaneMode = findKaneMode();

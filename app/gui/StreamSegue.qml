@@ -251,6 +251,8 @@ Item {
 
         // Ensure the SystemProperties async thread is finished,
         // since it may currently be using the SDL video subsystem
+        // Un lancement immédiat peut précéder la vérification différée de l'accueil.
+        if (runConfigChecks) SystemProperties.startAsyncLoad()
         SystemProperties.waitForAsyncLoad()
 
         // Kick off the stream
