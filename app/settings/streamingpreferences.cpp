@@ -152,8 +152,8 @@ void StreamingPreferences::reload()
     }
 #endif
 
-    width = settings.value(SER_WIDTH, 1280).toInt();
-    height = settings.value(SER_HEIGHT, 720).toInt();
+    width = settings.value(SER_WIDTH, 1920).toInt();
+    height = settings.value(SER_HEIGHT, 1080).toInt();
     fps = settings.value(SER_FPS, 60).toInt();
     autoResolution = settings.value(SER_AUTORESOLUTION, false).toBool();
     autoFps = settings.value(SER_AUTOFPS, false).toBool();

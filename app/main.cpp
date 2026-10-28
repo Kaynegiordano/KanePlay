@@ -623,7 +623,16 @@ int main(int argc, char *argv[])
 #endif
     {
         s_LoggerFile = new QFile(tempDir.filePath(QString("KanePlay-%1.log").arg(QDateTime::currentSecsSinceEpoch())));
-        if (s_LoggerFile->open(QIODevice::WriteOnly | QIODevice::Text)) {
+
+        // The log directory may be shared with other users (/tmp on macOS), so
+        // we must never open a file or symlink that someone else planted there.
+        // NewOnly fails if anything already exists at this path.
+        QIODevice::OpenMode logOpenMode = QIODevice::WriteOnly | QIODevice::Text | QIODevice::NewOnly;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+        if (s_LoggerFile->open(logOpenMode, QFileDevice::ReadOwner | QFileDevice::WriteOwner)) {
+#else
+        if (s_LoggerFile->open(logOpenMode)) {
+#endif
             QTextStream(stderr) << "Redirecting log output to " << s_LoggerFile->fileName() << Qt::endl;
             s_LoggerStream.setDevice(s_LoggerFile);
         }
@@ -915,7 +924,7 @@ int main(int argc, char *argv[])
     // NB: We do not force SDL_VIDEO_WAYLAND_MODE_SCALING to "stretch" on KDE,
     // because SDL 3.6 has a workaround for KDE and switches the default to
     // "aspect" for all desktops.
-    if (qgetenv("XDG_CURRENT_DESKTOP") != "KDE") {
+    if (!qgetenv("XDG_CURRENT_DESKTOP").contains("KDE")) {
         SDL_SetHint("SDL_VIDEO_WAYLAND_MODE_SCALING", "aspect");
     }
 
@@ -1239,7 +1248,7 @@ int main(int argc, char *argv[])
 
     if (hasGUI) {
         engine.rootContext()->setContextProperty("initialView", initialView);
-        engine.rootContext()->setContextProperty("runConfigChecks", commandLineParserResult == GlobalCommandLineParser::NormalStartRequested);
+        engine.rootContext()->setContextProperty("isGuiLaunch", commandLineParserResult == GlobalCommandLineParser::NormalStartRequested);
         // KaneMode opens KanePlay from its own interface, which already had an intro
         engine.rootContext()->setContextProperty("skipIntro", qEnvironmentVariableIsSet("KANEPLAY_NO_INTRO") ||
                                                               qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"));
@@ -1247,7 +1256,7 @@ int main(int argc, char *argv[])
         // and quitting run without a window and a stream starts on a plain black screen
         engine.rootContext()->setContextProperty("embedded", qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"));
         // Name of the app in sentences ("This network is blocking %1"): inside KaneMode, the streaming
-        // screens are part of KaneMode ("Local streaming"), so KanePlay is not named there
+        // screens are part of KaneMode ("Streaming"), so KanePlay is not named there
         engine.rootContext()->setContextProperty("appName", QStringLiteral("%1").arg(qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED") ? "KaneMode" : "KanePlay"));
         engine.rootContext()->setContextProperty("kaneMode", kaneModeBridge);
 

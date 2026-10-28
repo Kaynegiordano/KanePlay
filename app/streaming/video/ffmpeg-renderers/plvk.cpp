@@ -940,6 +940,7 @@ bool PlVkRenderer::populateQueues(int videoFormat)
     vkDeviceContext->nb_comp_queues = m_Vulkan->queue_compute.count;
 
     // Select a video decode queue that is capable of decoding our chosen format
+    vkDeviceContext->queue_family_decode_index = -1;
     for (uint32_t i = 0; i < queueFamilyCount; i++) {
         if (queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) {
             if (videoFormat & VIDEO_FORMAT_MASK_H264) {
@@ -1080,6 +1081,15 @@ bool PlVkRenderer::submitPendingSwapchainFrame()
 
 bool PlVkRenderer::acquirePendingSwapchainFrame()
 {
+    // If a swapchain (re)creation failed, m_Swapchain is NULL: it can neither render nor
+    // resize, and a device reset is requested so the main thread recreates the renderer.
+    if (m_Swapchain == nullptr) {
+        SDL_Event event;
+        event.type = SDL_RENDER_DEVICE_RESET;
+        SDL_PushEvent(&event);
+        return false;
+    }
+
 #ifndef Q_OS_WIN32
     // With libplacebo's Vulkan backend, swap_buffers() waits for queued
     // presents. Both the legacy and VRR paths need that before acquiring an
