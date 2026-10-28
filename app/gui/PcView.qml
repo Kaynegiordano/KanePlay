@@ -334,7 +334,7 @@ FocusScope {
 
                 Text {
                     Layout.fillWidth: true
-                    text: embedded ? qsTr("Welcome to local streaming") : qsTr("Welcome to KanePlay")
+                    text: embedded ? qsTr("Welcome to streaming") : qsTr("Welcome to KanePlay")
                     font.family: Theme.displayFont
                     font.pixelSize: 42
                     font.weight: Font.Bold

@@ -652,8 +652,8 @@
         <translation>Bienvenue sur KanePlay</translation>
     </message>
     <message>
-        <source>Welcome to local streaming</source>
-        <translation>Bienvenue dans le streaming local</translation>
+        <source>Welcome to streaming</source>
+        <translation>Bienvenue dans le streaming</translation>
     </message>
     <message>
         <source>Play the games of your PC on this device, from the couch or from the other side of the world.</source>
@@ -2178,8 +2178,8 @@
         <translation>Accueil</translation>
     </message>
     <message>
-        <source>Local streaming</source>
-        <translation>Streaming local</translation>
+        <source>Streaming</source>
+        <translation>Streaming</translation>
     </message>
     <message>
         <source>Update available for KanePlay: version %1</source>

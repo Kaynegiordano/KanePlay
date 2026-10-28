@@ -489,7 +489,7 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 // Hidden on narrow windows so the tabs keep their room
                 visible: toolBar.width > 960
-                text: embedded ? qsTr("Local streaming") : "KanePlay"
+                text: embedded ? qsTr("Streaming") : "KanePlay"
                 font.family: Theme.displayFont
                 font.pixelSize: 19
                 font.weight: Font.Bold
