@@ -75,7 +75,7 @@ D3D11VARenderer::D3D11VARenderer(int decoderSelectionPass)
       m_DevicesWithCodecSupport(0),
       m_AdapterIndex(-1),
       m_RenderAdapterIndex(-1),
-      m_LastColorTrc(AVCOL_TRC_UNSPECIFIED),
+      m_SwapChainColorTrc(AVCOL_TRC_UNSPECIFIED),
       m_AllowTearing(false),
       m_VrrBorderlessFlipModel(false),
       m_VrrSwapChainAllowsTearing(false),
@@ -2222,7 +2222,7 @@ bool D3D11VARenderer::prepareFrameForPresent(AVFrame* frame)
 
 void D3D11VARenderer::updateSwapChainColorSpace(AVFrame* frame)
 {
-    if (frame->color_trc != m_LastColorTrc) {
+    if (frame->color_trc != m_SwapChainColorTrc) {
         HRESULT hr;
         if (frame->color_trc == AVCOL_TRC_SMPTE2084) {
             hr = m_SwapChain->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
@@ -2241,7 +2241,7 @@ void D3D11VARenderer::updateSwapChainColorSpace(AVFrame* frame)
             }
         }
 
-        m_LastColorTrc = frame->color_trc;
+        m_SwapChainColorTrc = frame->color_trc;
     }
 }
 
