@@ -2116,8 +2116,8 @@
         <translation>essai %1 sur %2</translation>
     </message>
     <message>
-        <source>Press %1 to disconnect your session</source>
-        <translation>Appuyez sur %1 pour déconnecter votre session</translation>
+        <source>Press %1 to end your session</source>
+        <translation>Appuyez sur %1 pour quitter la session</translation>
     </message>
     <message>
         <source>Ctrl+Alt+Shift+Q</source>

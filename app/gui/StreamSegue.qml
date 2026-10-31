@@ -311,7 +311,7 @@ Item {
             // gamepad usage.
             hintText.text = SdlGamepadKeyNavigation.getConnectedGamepads() > 0 ?
                         qsTr("Start+Select opens the menu, LB+RB+Select+Y disconnects") :
-                        qsTr("Press %1 to disconnect your session").arg(qsTr("Ctrl+Alt+Shift+Q"))
+                        qsTr("Press %1 to end your session").arg(qsTr("Ctrl+Alt+Shift+Q"))
             showHint = true
 
             // Stop GUI gamepad usage now

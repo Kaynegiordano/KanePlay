@@ -159,6 +159,9 @@ public:
 
     void setShouldExit(bool quitHostApp = false);
 
+    // KaneMode: quit the app on the host when this session ends (Ctrl+Alt+Shift+Q)
+    void setQuitHostApp();
+
 signals:
     void stageStarting(QString stage);
 
@@ -317,6 +320,7 @@ private:
     int m_FlushingWindowEventsRef;
     QStringList m_LaunchWarnings;
     bool m_ShouldExit;
+    bool m_QuitHostApp;
 
     bool m_AsyncConnectionSuccess;
     int m_PortTestResults;

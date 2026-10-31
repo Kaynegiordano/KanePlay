@@ -29,6 +29,10 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Detected quit key combo");
 
+        // KaneMode: end the session on the host too, so the host gets back its display,
+        // scale and sound (Sunshine undo commands) instead of keeping the app running
+        Session::get()->setQuitHostApp();
+
         // Push a quit event to the main loop
         SDL_Event event;
         event.type = SDL_QUIT;
