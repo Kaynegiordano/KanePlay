@@ -1,4 +1,5 @@
 #include "computermodel.h"
+#include "backend/kanemodescale.h"
 
 #include <QThreadPool>
 
@@ -47,7 +48,9 @@ QVariant ComputerModel::data(const QModelIndex& index, int role) const
     case RunningGameRole:
         for (const NvApp& app : computer->appList) {
             if (app.id == computer->currentGameId) {
-                return app.name;
+                // Variante de mise à l'échelle (KaneMode) : le nom de l'appli d'origine
+                QString base;
+                return KaneModeScale::parse(app.name, &base) ? base : app.name;
             }
         }
         return QString();

@@ -1603,6 +1603,26 @@
         <translation>7.1</translation>
     </message>
     <message>
+        <source>Host PC scaling</source>
+        <translation>Mise à l’échelle du PC hôte</translation>
+    </message>
+    <message>
+        <source>Display scaling of the host while streaming, back to normal afterwards (needs the KaneMode add-on on the host)</source>
+        <translation>Échelle de l’écran de l’hôte pendant le streaming, remise comme avant ensuite (complément KaneMode à installer sur l’hôte)</translation>
+    </message>
+    <message>
+        <source>Unchanged</source>
+        <translation>Ne pas changer</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation>Bureau</translation>
+    </message>
+    <message>
+        <source>Sharp text · desktop mouse · 60 FPS</source>
+        <translation>Texte net · souris du bureau · 60 i/s</translation>
+    </message>
+    <message>
         <source>Mute the host PC</source>
         <translation>Couper le son du PC hôte</translation>
     </message>

@@ -1,4 +1,5 @@
 #include "appmodel.h"
+#include "backend/kanemodescale.h"
 
 #include <QSettings>
 
@@ -32,9 +33,10 @@ void AppModel::initialize(ComputerManager* computerManager, int computerIndex, b
     updateAppList(m_Computer->appList);
 }
 
+// Variante de mise à l'échelle en cours (KaneMode) : c'est l'appli d'origine qui est « en cours »
 int AppModel::getRunningAppId()
 {
-    return m_CurrentGameId;
+    return KaneModeScale::baseId(m_AllApps, m_CurrentGameId);
 }
 
 QString AppModel::getComputerUuid()
@@ -45,8 +47,9 @@ QString AppModel::getComputerUuid()
 QString AppModel::getRunningAppName()
 {
     if (m_CurrentGameId != 0) {
+        const int runningId = KaneModeScale::baseId(m_AllApps, m_CurrentGameId);
         for (int i = 0; i < m_AllApps.count(); i++) {
-            if (m_AllApps[i].id == m_CurrentGameId) {
+            if (m_AllApps[i].id == runningId) {
                 return m_AllApps[i].name;
             }
         }
@@ -166,7 +169,7 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
     case NameRole:
         return app.name;
     case RunningRole:
-        return m_Computer->currentGameId == app.id;
+        return KaneModeScale::baseId(m_AllApps, m_Computer->currentGameId) == app.id;
     case BoxArtRole:
         // FIXME: const-correctness
         return const_cast<BoxArtManager&>(m_BoxArtManager).loadBoxArt(m_Computer, app);
@@ -222,6 +225,10 @@ QVector<NvApp> AppModel::getVisibleApps(const QVector<NvApp>& appList)
     QVector<NvApp> visibleApps;
 
     for (const NvApp& app : appList) {
+        // Variantes de mise à l'échelle créées par KaneMode sur l'hôte : jamais montrées
+        if (KaneModeScale::isVariant(app)) {
+            continue;
+        }
         if (m_FavoritesOnly && !m_Favorites.contains(app.id)) {
             continue;
         }

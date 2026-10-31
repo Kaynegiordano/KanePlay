@@ -1,4 +1,5 @@
 #include "startstream.h"
+#include "backend/kanemodescale.h"
 #include "backend/computermanager.h"
 #include "backend/computerseeker.h"
 #include "streaming/session.h"
@@ -157,7 +158,8 @@ public:
 
     bool isStreamingApp(NvApp app) const
     {
-        return m_Computer->currentGameId == app.id;
+        // Une variante de mise à l'échelle de cette appli (KaneMode) compte comme elle
+        return m_Computer->currentGameId == app.id || KaneModeScale::baseId(m_Computer->appList, m_Computer->currentGameId) == app.id;
     }
 
     QString getCurrentAppName() const

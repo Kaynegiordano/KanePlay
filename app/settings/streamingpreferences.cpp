@@ -51,6 +51,7 @@
 #define SER_ENABLEVRR "enablevrr"
 #define SER_GAMEOPTS "gameopts"
 #define SER_HOSTAUDIO "hostaudio"
+#define SER_HOSTSCALE "kanemodehostscale"
 #define SER_MULTICONT "multicontroller"
 #define SER_AUDIOCFG "audiocfg"
 #define SER_VIDEOCFG "videocfg"
@@ -182,6 +183,7 @@ void StreamingPreferences::reload()
     enableVrr = settings.value(SER_ENABLEVRR, false).toBool();
     gameOptimizations = settings.value(SER_GAMEOPTS, true).toBool();
     playAudioOnHost = settings.value(SER_HOSTAUDIO, false).toBool();
+    hostScale = settings.value(SER_HOSTSCALE, 0).toInt();
     multiController = settings.value(SER_MULTICONT, true).toBool();
     // Embedded in KaneMode (a handheld): every local gamepad plays as player 1, so the host gets
     // exactly one virtual controller. With one per local gamepad, the host sometimes ended up with
@@ -362,6 +364,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_ENABLEVRR, enableVrr);
     settings.setValue(SER_GAMEOPTS, gameOptimizations);
     settings.setValue(SER_HOSTAUDIO, playAudioOnHost);
+    settings.setValue(SER_HOSTSCALE, hostScale);
     settings.setValue(SER_MULTICONT, multiController);
     settings.setValue(SER_MDNS, enableMdns);
     settings.setValue(SER_QUITAPPAFTER, quitAppAfter);

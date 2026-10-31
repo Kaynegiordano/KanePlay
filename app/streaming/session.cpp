@@ -7,6 +7,7 @@
 // Frame rate cap of the battery saver
 #define BATTERY_SAVER_MAX_FPS 60
 #include "backend/richpresencemanager.h"
+#include "backend/kanemodescale.h"
 
 #include <Limelight.h>
 #include "SDL_compat.h"
@@ -624,6 +625,9 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_BatterySaverActive(false),
       m_InGameMenu(this)
 {
+    // KaneMode : variante de l'appli qui règle la mise à l'échelle de l'hôte (backend/kanemodescale.h)
+    QReadLocker lock(&computer->lock);
+    m_App = KaneModeScale::pick(computer->appList, app, m_Preferences->hostScale, computer->currentGameId);
 }
 
 int Session::getWindowPixelHeight()

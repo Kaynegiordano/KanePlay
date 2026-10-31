@@ -141,6 +141,8 @@ public:
     Q_PROPERTY(bool enableVrr MEMBER enableVrr NOTIFY enableVrrChanged)
     Q_PROPERTY(bool gameOptimizations MEMBER gameOptimizations NOTIFY gameOptimizationsChanged)
     Q_PROPERTY(bool playAudioOnHost MEMBER playAudioOnHost NOTIFY playAudioOnHostChanged)
+    // KaneMode: host display scaling while streaming (0 = unchanged), see backend/kanemodescale.h
+    Q_PROPERTY(int hostScale MEMBER hostScale NOTIFY hostScaleChanged)
     Q_PROPERTY(bool multiController MEMBER multiController NOTIFY multiControllerChanged)
     Q_PROPERTY(bool enableMdns MEMBER enableMdns NOTIFY enableMdnsChanged)
     Q_PROPERTY(bool quitAppAfter MEMBER quitAppAfter NOTIFY quitAppAfterChanged)
@@ -210,6 +212,7 @@ public:
     bool enableVrr;
     bool gameOptimizations;
     bool playAudioOnHost;
+    int hostScale;
     bool multiController;
     bool enableMdns;
     bool quitAppAfter;
@@ -264,6 +267,7 @@ signals:
     void enableVrrChanged();
     void gameOptimizationsChanged();
     void playAudioOnHostChanged();
+    void hostScaleChanged();
     void multiControllerChanged();
     void unsupportedFpsChanged();
     void enableMdnsChanged();

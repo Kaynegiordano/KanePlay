@@ -788,6 +788,22 @@ QtObject {
                 def: function() { return true }
             },
             {
+                // KaneMode : variante de l'appli créée sur l'hôte par le complément (backend/kanemodescale.h)
+                key: "hostScale", category: "system", icon: "monitor", type: "choice",
+                label: qsTr("Host PC scaling"),
+                desc: qsTr("Display scaling of the host while streaming, back to normal afterwards (needs the KaneMode add-on on the host)"),
+                options: function() {
+                    return [
+                        { label: qsTr("Unchanged"), value: 0 },
+                        { label: "100 %", value: 100 }, { label: "125 %", value: 125 }, { label: "150 %", value: 150 },
+                        { label: "175 %", value: 175 }, { label: "200 %", value: 200 }
+                    ]
+                },
+                get: function() { return StreamingPreferences.hostScale },
+                set: function(value) { StreamingPreferences.hostScale = value },
+                def: function() { return 0 }
+            },
+            {
                 key: "gameOptimizations", category: "system", icon: "gamepad", type: "bool",
                 label: qsTr("Optimize game settings"),
                 desc: qsTr("Lets the host adjust games for streaming"),
@@ -843,7 +859,7 @@ QtObject {
     readonly property var profileKeys: [
         "autoResolution", "width", "height", "autoFps", "fps",
         "autoAdjustBitrate", "bitrateKbps", "videoCodecConfig", "enableHdr", "enableVsync", "framePacing",
-        "enableVrr", "enableYUV444", "audioConfig"
+        "enableVrr", "enableYUV444", "audioConfig", "absoluteMouseMode", "gameOptimizations"
     ]
 
     // Applied through setResolution(), setFps() and the bitrate rules
@@ -965,22 +981,33 @@ QtObject {
         }
     }
 
+    // Profils de jeu : on quitte les réglages du profil Bureau (souris du bureau, 4:4:4)
+    function leaveDesktop(keepYuv444) {
+        StreamingPreferences.absoluteMouseMode = false
+        StreamingPreferences.gameOptimizations = true
+        if (!keepYuv444) {
+            StreamingPreferences.enableYUV444 = false
+        }
+    }
+
     // Built-in streaming profiles
     readonly property var profiles: [
         { key: "performance", icon: "layers", label: qsTr("Performance"), color: Theme.kaneMode ? Theme.accent : "#FF6A3D",
           summary: qsTr("Auto · auto FPS"),
           apply: function() {
+              leaveDesktop(false)
               setResolution(0, 0, true)
               setFps(0, true)
               StreamingPreferences.autoAdjustBitrate = true
               StreamingPreferences.bitrateKbps = defaultBitrate()
           },
           matches: function() {
-              return StreamingPreferences.autoResolution && StreamingPreferences.autoFps
+              return !StreamingPreferences.absoluteMouseMode && StreamingPreferences.autoResolution && StreamingPreferences.autoFps
           } },
         { key: "quality", icon: "image", label: qsTr("Quality"), color: Theme.kaneMode ? Theme.accent : "#9B8CFF",
           summary: qsTr("1440p · 60 FPS · high bitrate"),
           apply: function() {
+              leaveDesktop(true)
               setResolution(2560, 1440, false)
               setFps(60, false)
               StreamingPreferences.autoAdjustBitrate = false
@@ -988,31 +1015,51 @@ QtObject {
                                                           StreamingPreferences.getMaxBitrate(StreamingPreferences.unlockBitrate))
           },
           matches: function() {
-              return !StreamingPreferences.autoResolution && StreamingPreferences.height === 1440 &&
+              return !StreamingPreferences.absoluteMouseMode && !StreamingPreferences.autoResolution && StreamingPreferences.height === 1440 &&
                      !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
+          } },
+        // Bureau à distance : texte net (4:4:4), souris du bureau, réglages des jeux laissés tels quels
+        { key: "desktop", icon: "monitor", label: qsTr("Desktop"), color: Theme.kaneMode ? Theme.accent : "#5CC8FF",
+          summary: qsTr("Sharp text · desktop mouse · 60 FPS"),
+          apply: function() {
+              setResolution(0, 0, true)
+              setFps(60, false)
+              StreamingPreferences.enableYUV444 = true
+              StreamingPreferences.absoluteMouseMode = true
+              StreamingPreferences.gameOptimizations = false
+              StreamingPreferences.enableVsync = true
+              StreamingPreferences.autoAdjustBitrate = false
+              StreamingPreferences.bitrateKbps = Math.min(Math.round(defaultBitrate() * 1.5 / 500) * 500,
+                                                          StreamingPreferences.getMaxBitrate(StreamingPreferences.unlockBitrate))
+          },
+          matches: function() {
+              return StreamingPreferences.absoluteMouseMode && StreamingPreferences.enableYUV444 &&
+                     !StreamingPreferences.gameOptimizations && !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
           } },
         { key: "battery", icon: "power", label: qsTr("Battery"), color: Theme.kaneMode ? Theme.accent : "#5FD39A",
           summary: qsTr("720p · 60 FPS · light"),
           apply: function() {
+              leaveDesktop(false)
               setResolution(1280, 720, false)
               setFps(60, false)
               StreamingPreferences.autoAdjustBitrate = true
               StreamingPreferences.bitrateKbps = defaultBitrate()
           },
           matches: function() {
-              return !StreamingPreferences.autoResolution && StreamingPreferences.height === 720 &&
+              return !StreamingPreferences.absoluteMouseMode && !StreamingPreferences.autoResolution && StreamingPreferences.height === 720 &&
                      !StreamingPreferences.autoFps && StreamingPreferences.fps === 60
           } },
         { key: "weaknetwork", icon: "wifi", label: qsTr("Weak network"), color: Theme.kaneMode ? Theme.accent : "#5CC8FF",
           summary: qsTr("720p · 30 FPS · low bitrate"),
           apply: function() {
+              leaveDesktop(false)
               setResolution(1280, 720, false)
               setFps(30, false)
               StreamingPreferences.autoAdjustBitrate = false
               StreamingPreferences.bitrateKbps = Math.min(defaultBitrate(), 6000)
           },
           matches: function() {
-              return !StreamingPreferences.autoResolution && StreamingPreferences.height === 720 &&
+              return !StreamingPreferences.absoluteMouseMode && !StreamingPreferences.autoResolution && StreamingPreferences.height === 720 &&
                      !StreamingPreferences.autoFps && StreamingPreferences.fps === 30
           } }
     ]
