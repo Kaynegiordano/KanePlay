@@ -434,6 +434,17 @@
     </message>
 </context>
 <context>
+    <name>DataUsage</name>
+    <message>
+        <source>%1 MB</source>
+        <translation>%1 Mo</translation>
+    </message>
+    <message>
+        <source>%1 GB</source>
+        <translation>%1 Go</translation>
+    </message>
+</context>
+<context>
     <name>GamepadMapper</name>
     <message>
         <source>Gamepad Mapping</source>
@@ -442,6 +453,10 @@
 </context>
 <context>
     <name>InGameMenu</name>
+    <message>
+        <source>  ·  %1 of data</source>
+        <translation>  ·  %1 de données</translation>
+    </message>
     <message>
         <source>A  Choose        B  Back to the game</source>
         <translation>A  Choisir        B  Revenir au jeu</translation>
@@ -1166,6 +1181,14 @@
         <translation>%1 h %2</translation>
     </message>
     <message>
+        <source>MB</source>
+        <translation>Mo</translation>
+    </message>
+    <message>
+        <source>GB</source>
+        <translation>Go</translation>
+    </message>
+    <message>
         <source>%1 → %2</source>
         <translation>%1 → %2</translation>
     </message>
@@ -1220,6 +1243,14 @@
     <message>
         <source>%1% of frames lost</source>
         <translation>%1 % d’images perdues</translation>
+    </message>
+    <message>
+        <source>Data</source>
+        <translation>Données</translation>
+    </message>
+    <message>
+        <source>%1 %2 this month</source>
+        <translation>%1 %2 ce mois-ci</translation>
     </message>
     <message>
         <source>Latency during the session</source>

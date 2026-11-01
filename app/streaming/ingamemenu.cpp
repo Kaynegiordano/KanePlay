@@ -1,5 +1,6 @@
 #include "ingamemenu.h"
 #include "session.h"
+#include "datausage.h"
 
 #include <QCoreApplication>
 
@@ -33,6 +34,10 @@ void InGameMenu::render()
     Overlay::MenuModel model;
     model.title = m_Session->getAppName();
     model.subtitle = m_Session->getComputerName();
+    if (DataUsage::bytes() != 0) {
+        // KaneMode: what the stream has used so far
+        model.subtitle += QCoreApplication::translate("InGameMenu", "  ·  %1 of data").arg(DataUsage::format(DataUsage::bytes()));
+    }
     model.selected = m_Selected;
     model.hints = QCoreApplication::translate("InGameMenu", "A  Choose        B  Back to the game");
     model.scale = m_Session->getWindowPixelHeight() / 1080.0f;

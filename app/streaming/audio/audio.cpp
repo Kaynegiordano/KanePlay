@@ -1,4 +1,5 @@
 #include "../session.h"
+#include "../datausage.h"
 #include "renderers/renderer.h"
 
 #ifdef HAVE_SLAUDIO
@@ -150,6 +151,9 @@ void Session::arCleanup()
 void Session::arDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int samplesDecoded;
+
+    // KaneMode: counted even when the sample is dropped below, it came over the network
+    DataUsage::addAudioPacket(sampleLength);
 
 #ifndef STEAM_LINK
     // Set this thread to high priority to reduce the chance of missing

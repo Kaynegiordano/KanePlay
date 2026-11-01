@@ -2,6 +2,7 @@
 #include "ffmpeg.h"
 #include "utils.h"
 #include "streaming/session.h"
+#include "streaming/datausage.h"
 
 #include <h264_stream.h>
 
@@ -1173,6 +1174,11 @@ void FFmpegVideoDecoder::stringifyVideoStatsCompact(VIDEO_STATS& stats, char* ou
         if (session->isBatterySaverActive()) {
             extras << "BATTERY SAVER";
         }
+    }
+
+    // KaneMode: data received since the start of the session
+    if (DataUsage::bytes() != 0) {
+        extras.prepend(QString("DATA %1").arg(DataUsage::format(DataUsage::bytes()).toUpper()));
     }
 
     if (!extras.isEmpty()) {
@@ -2385,6 +2391,9 @@ int FFmpegVideoDecoder::submitDecodeUnit(PDECODE_UNIT du)
 
     // Flip stats windows roughly every second
     if (LiGetMicroseconds() > m_ActiveWndVideoStats.measurementStartUs + 1000000) {
+        // KaneMode: data received so far, for the overlay, the menu and the summary
+        DataUsage::sample();
+
         // Update overlay stats if it's enabled
         if (Session::get()->getOverlayManager().isOverlayEnabled(Overlay::OverlayDebug)) {
             VIDEO_STATS lastTwoWndStats = {};

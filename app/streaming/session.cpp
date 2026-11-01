@@ -1,4 +1,5 @@
 #include "session.h"
+#include "streaming/datausage.h"
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
 #include "streaming/vrrratepolicy.h"
@@ -2089,6 +2090,8 @@ bool Session::startConnectionAsync()
             m_StreamConfig.bitrate = batteryBitrate;
         }
     }
+
+    DataUsage::reset(m_StreamConfig.packetSize);
 
     delete m_StreamHealthMonitor;
     m_StreamHealthMonitor = new StreamHealthMonitor(m_Computer->uuid,

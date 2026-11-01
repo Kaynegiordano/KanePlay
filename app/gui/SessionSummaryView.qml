@@ -45,6 +45,20 @@ FocusScope {
         return qsTr("%1 h %2").arg(Math.floor(minutes / 60)).arg(("0" + (minutes % 60)).slice(-2))
     }
 
+    // KaneMode: data received, "1,24" + "GB" like streaming/datausage.cpp
+    function dataValue(bytes) {
+        var mb = bytes / 1000000
+        if (mb < 1000) {
+            return Number(mb).toLocaleString(Qt.locale(), 'f', 0)
+        }
+        var gb = mb / 1000
+        return Number(gb).toLocaleString(Qt.locale(), 'f', gb < 100 ? 2 : 0)
+    }
+
+    function dataUnit(bytes) {
+        return bytes < 1000000000 ? qsTr("MB") : qsTr("GB")
+    }
+
     function playAgain() {
         if (createSession === null) {
             return
@@ -206,7 +220,7 @@ FocusScope {
 
         GridLayout {
             Layout.fillWidth: true
-            columns: 4
+            columns: summary.dataBytes ? 5 : 4
             columnSpacing: 14
 
             SummaryStat {
@@ -235,6 +249,15 @@ FocusScope {
                 note: summary.learnedPercent !== undefined && summary.learnedPercent < 100 ?
                           qsTr("Next stream at %1% of the bitrate").arg(summary.learnedPercent) :
                           summary.lossPercent !== undefined ? qsTr("%1% of frames lost").arg(Number(summary.lossPercent).toLocaleString(Qt.locale(), 'f', 1)) : ""
+            }
+
+            // KaneMode: what the session used, and the month so far
+            SummaryStat {
+                visible: !!summary.dataBytes
+                label: qsTr("Data")
+                value: summary.dataBytes ? summaryView.dataValue(summary.dataBytes) : "—"
+                unit: summary.dataBytes ? summaryView.dataUnit(summary.dataBytes) : ""
+                note: summary.monthBytes ? qsTr("%1 %2 this month").arg(summaryView.dataValue(summary.monthBytes)).arg(summaryView.dataUnit(summary.monthBytes)) : ""
             }
         }
 

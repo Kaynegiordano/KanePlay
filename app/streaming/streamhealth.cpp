@@ -1,4 +1,5 @@
 #include "streamhealth.h"
+#include "datausage.h"
 #include "path.h"
 #include "settings/streamingpreferences.h"
 
@@ -197,8 +198,16 @@ void StreamHealthMonitor::finishSession()
         newFactor = updateLearnedBitrate();
     }
 
+    // KaneMode: every session counts in the data of the month, even a short one
+    uint64_t dataBytes = DataUsage::bytes();
+    uint64_t monthBytes = DataUsage::addToMonth(dataBytes);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Data received: %llu bytes (this month: %llu)",
+                (unsigned long long)dataBytes, (unsigned long long)monthBytes);
+
     if (m_Windows >= MIN_SUMMARY_WINDOWS && m_TotalFrames != 0 && !m_HostUuid.isEmpty()) {
         QVariantMap summary;
+        summary["dataBytes"] = (qulonglong)dataBytes;
+        summary["monthBytes"] = (qulonglong)monthBytes;
         summary["endTime"] = QDateTime::currentDateTime();
         summary["durationSecs"] = (qulonglong)m_Windows;
         summary["lossPercent"] = (double)m_DroppedFrames / m_TotalFrames * 100.0;

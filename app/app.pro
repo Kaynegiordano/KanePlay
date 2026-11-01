@@ -194,6 +194,7 @@ SOURCES += \
     streaming/session.cpp \
     streaming/losslessscaling.cpp \
     streaming/streamhealth.cpp \
+    streaming/datausage.cpp \
     streaming/ingamemenu.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
@@ -237,6 +238,7 @@ HEADERS += \
     streaming/session.h \
     streaming/losslessscaling.h \
     streaming/streamhealth.h \
+    streaming/datausage.h \
     streaming/ingamemenu.h \
     streaming/audio/renderers/renderer.h \
     streaming/audio/renderers/sdl.h \
