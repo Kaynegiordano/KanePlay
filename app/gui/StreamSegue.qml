@@ -80,6 +80,11 @@ Item {
         streamStartTime = Date.now()
         UiSound.play("connected")
 
+        // Started from a KaneMode shortcut: KaneMode comes back when the session is over
+        if (window.returnAfterStream) {
+            window.shortcutStreamStarted = true
+        }
+
         // Hide the window now that streaming has begun
         window.visible = false
     }

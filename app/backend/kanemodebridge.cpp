@@ -1,4 +1,8 @@
 #include "kanemodebridge.h"
+#include "computermanager.h"
+#include "boxartmanager.h"
+
+#include <QReadLocker>
 
 #include <QDebug>
 #include <QJsonDocument>
@@ -107,6 +111,31 @@ void KaneModeBridge::listen()
     // Our own command, once the UI is up
     QString own = command();
     QTimer::singleShot(0, this, [this, own]() { handle(own); });
+}
+
+void KaneModeBridge::prefetchBoxArt(ComputerManager* manager)
+{
+    if (m_BoxArt == nullptr) {
+        m_BoxArt = new BoxArtManager(this);
+    }
+    connect(manager, &ComputerManager::computerStateChanged, this, [this](NvComputer* computer) {
+        QVector<NvApp> apps;
+        {
+            QReadLocker lock(&computer->lock);
+            if (computer->pairState != NvComputer::PS_PAIRED || computer->state != NvComputer::CS_ONLINE) {
+                return;
+            }
+            apps = computer->appList;
+        }
+        for (NvApp& app : apps) {
+            const QString key = computer->uuid + QLatin1Char('/') + QString::number(app.id);
+            if (m_BoxArtAsked.contains(key)) {
+                continue;
+            }
+            m_BoxArtAsked.insert(key);
+            m_BoxArt->loadBoxArt(computer, app);
+        }
+    });
 }
 
 void KaneModeBridge::handle(const QString& command)

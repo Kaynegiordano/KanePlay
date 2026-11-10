@@ -1140,8 +1140,12 @@ int main(int argc, char *argv[])
     qmlRegisterUncreatableType<Session>("Session", 1, 0, "Session", "Session cannot be created from QML");
     qmlRegisterSingletonType<ComputerManager>("ComputerManager", 1, 0,
                                               "ComputerManager",
-                                              [](QQmlEngine* qmlEngine, QJSEngine*) -> QObject* {
-                                                  return new ComputerManager(StreamingPreferences::get(qmlEngine));
+                                              [kaneModeBridge](QQmlEngine* qmlEngine, QJSEngine*) -> QObject* {
+                                                  ComputerManager* manager = new ComputerManager(StreamingPreferences::get(qmlEngine));
+                                                  if (kaneModeBridge != nullptr) {
+                                                      kaneModeBridge->prefetchBoxArt(manager);
+                                                  }
+                                                  return manager;
                                               });
     qmlRegisterSingletonType<AutoUpdateChecker>("AutoUpdateChecker", 1, 0,
                                                 "AutoUpdateChecker",

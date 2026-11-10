@@ -266,6 +266,13 @@ ApplicationWindow {
             }
 
             libraryView = findLibraryView()
+
+            if (returnAfterStream && shortcutStreamStarted && currentItem &&
+                    !(currentItem instanceof StreamSegue) && !(currentItem instanceof SessionSummaryView)) {
+                returnAfterStream = false
+                shortcutStreamStarted = false
+                returnToKaneMode()
+            }
         }
 
         Keys.onEscapePressed: {
@@ -415,6 +422,11 @@ ApplicationWindow {
     // as soon as the PC is found (it may still be waking up or being searched for)
     property var pendingLaunch: null
 
+    // A game launched from a KaneMode shortcut goes back to KaneMode once its session is over
+    // (after the session summary), instead of staying on its PC's library
+    property bool returnAfterStream: false
+    property bool shortcutStreamStarted: false
+
     function tryPendingLaunch()
     {
         if (pendingLaunch === null || homeView === null) {
@@ -449,10 +461,14 @@ ApplicationWindow {
         ignoreUnknownSignals: true
 
         function onShowRequested() {
+            returnAfterStream = false
+            shortcutStreamStarted = false
             bringToFront()
         }
 
         function onLaunchRequested(uuid, appId, appName) {
+            returnAfterStream = true
+            shortcutStreamStarted = false
             bringToFront()
             pendingLaunch = { "uuid": uuid, "appId": appId, "appName": appName }
             pendingLaunchTimer.tries = 0

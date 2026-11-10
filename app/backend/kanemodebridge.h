@@ -1,9 +1,12 @@
 #pragma once
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 class QLocalServer;
+class ComputerManager;
+class BoxArtManager;
 
 // KanePlay embedded in KaneMode (KANEPLAY_EMBEDDED). KaneMode starts KanePlay.exe
 // with a command in KANEMODE_COMMAND:
@@ -34,6 +37,10 @@ public:
     // the foreground back when it is closed
     Q_INVOKABLE void openInKaneMode(const QString& panel);
 
+    // Box art of every app of our paired PCs, cached as soon as their app list is known: KaneMode
+    // shows it on the shortcuts to a PC's games (its library reads the box art cache)
+    void prefetchBoxArt(ComputerManager* manager);
+
 signals:
     void showRequested();
     void launchRequested(QString uuid, int appId, QString appName);
@@ -42,4 +49,6 @@ private:
     void handle(const QString& command);
 
     QLocalServer* m_Server;
+    BoxArtManager* m_BoxArt = nullptr;
+    QSet<QString> m_BoxArtAsked;
 };
