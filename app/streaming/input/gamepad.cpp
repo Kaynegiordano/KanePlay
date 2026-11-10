@@ -302,6 +302,13 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
         return;
     }
 
+    // KaneMode, single controller mode: a button pressed on another gamepad than the one the host
+    // knows makes it the host's player 1, with a virtual gamepad of its kind (PlayStation for a
+    // DualSense, and so on)
+    if (!m_MultiController && event->state == SDL_PRESSED && state->jsId != m_AnnouncedJsId) {
+        announceGamepad(state, true);
+    }
+
     if (m_SwapFaceButtons) {
         switch (event->button) {
         case SDL_CONTROLLER_BUTTON_A:
@@ -467,6 +474,11 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
     if (state->buttons == QUIT_COMBO_FLAGS && qgetenv("NO_GAMEPAD_QUIT") != "1") {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Detected quit gamepad button combo");
+
+        // KaneMode: a clean end on both sides, as with Ctrl+Alt+Shift+Q. The app is quit on the
+        // host, which then runs its undo commands (display, scale, sound) right away, instead of
+        // keeping a session nobody will come back to.
+        Session::get()->setQuitHostApp();
 
         // Push a quit event to the main loop
         SDL_Event event;
@@ -683,6 +695,133 @@ void SdlInputHandler::handleJoystickBatteryEvent(SDL_JoyBatteryEvent* event)
 
 #endif
 
+void SdlInputHandler::describeGamepad(GamepadState* state, uint8_t& type, uint32_t& buttons, uint32_t& capabilities)
+{
+    buttons = 0;
+    capabilities = 0;
+    type = LI_CTYPE_UNKNOWN;
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+    for (int i = 0; i < (int)SDL_arraysize(k_ButtonMap); i++) {
+        if (SDL_GameControllerHasButton(state->controller, (SDL_GameControllerButton)i)) {
+            buttons |= k_ButtonMap[i];
+        }
+    }
+
+    if (SDL_GameControllerGetBindForAxis(state->controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT).bindType == SDL_CONTROLLER_BINDTYPE_AXIS ||
+        SDL_GameControllerGetBindForAxis(state->controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT).bindType == SDL_CONTROLLER_BINDTYPE_AXIS) {
+        // We assume these are analog triggers if the binding is to an axis rather than a button
+        capabilities |= LI_CCAP_ANALOG_TRIGGERS;
+    }
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    if (SDL_GameControllerHasRumble(state->controller)) {
+        capabilities |= LI_CCAP_RUMBLE;
+    }
+    if (SDL_GameControllerHasRumbleTriggers(state->controller)) {
+        capabilities |= LI_CCAP_TRIGGER_RUMBLE;
+    }
+    if (SDL_GameControllerHasLED(state->controller)) {
+        capabilities |= LI_CCAP_RGB_LED;
+    }
+#endif
+    if (SDL_GameControllerGetNumTouchpads(state->controller) > 0) {
+        capabilities |= LI_CCAP_TOUCHPAD;
+        if (SDL_GameControllerGetNumTouchpads(state->controller) > 1) {
+            capabilities |= LI_CCAP_DUAL_TOUCHPAD;
+        }
+    }
+    if (SDL_GameControllerHasSensor(state->controller, SDL_SENSOR_ACCEL)) {
+        capabilities |= LI_CCAP_ACCEL;
+    }
+    if (SDL_GameControllerHasSensor(state->controller, SDL_SENSOR_GYRO)) {
+        capabilities |= LI_CCAP_GYRO;
+    }
+    if (SDL_JoystickCurrentPowerLevel(SDL_GameControllerGetJoystick(state->controller)) != SDL_JOYSTICK_POWER_UNKNOWN || SDL_VERSION_ATLEAST(2, 24, 0)) {
+        capabilities |= LI_CCAP_BATTERY_STATE;
+    }
+
+    uint16_t vendorId = SDL_GameControllerGetVendor(state->controller);
+    uint16_t productId = SDL_GameControllerGetProduct(state->controller);
+    switch (SDL_GameControllerGetType(state->controller)) {
+    case SDL_CONTROLLER_TYPE_XBOX360:
+    case SDL_CONTROLLER_TYPE_XBOXONE:
+        type = LI_CTYPE_XBOX;
+        break;
+    case SDL_CONTROLLER_TYPE_PS3:
+    case SDL_CONTROLLER_TYPE_PS4:
+    case SDL_CONTROLLER_TYPE_PS5:
+        type = LI_CTYPE_PS;
+        break;
+    case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO:
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+    case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+    case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+#endif
+        type = LI_CTYPE_NINTENDO;
+        break;
+    default:
+        // These Steam Controller VID/PID combos come from SDL's controller_list.h
+        // TODO: Use SDL_GAMEPAD_TYPE_STEAM on SDL 3.6+
+        if (vendorId == 0x28de) {
+            switch (productId) {
+            case 0x1101:
+            case 0x1102:
+            case 0x1105:
+            case 0x1106:
+            case 0x1142:
+            case 0x1201:
+            case 0x1202:
+            case 0x1205:
+            case 0x1302:
+            case 0x1303:
+            case 0x1304:
+            case 0x1305:
+                type = LI_CTYPE_STEAM;
+                break;
+            default:
+                break;
+            }
+        }
+        break;
+    }
+#else
+    (void)state;
+#endif
+}
+
+void SdlInputHandler::announceGamepad(GamepadState* state, bool replace)
+{
+    uint8_t type;
+    uint32_t buttons, capabilities;
+    describeGamepad(state, type, buttons, capabilities);
+
+    if (replace && m_Announced && type == m_AnnouncedType && capabilities == m_AnnouncedCaps) {
+        // Same kind of gamepad: the host's virtual gamepad stays as it is
+        m_AnnouncedJsId = state->jsId;
+        return;
+    }
+
+    if (replace && m_Announced) {
+        // The host frees player 1 when the gamepad mask no longer has it (Sunshine refuses a
+        // second arrival for a slot in use: "ControllerNumber already allocated")
+        LiSendMultiControllerEvent(0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Host player 1 is now %s (type %d, capabilities 0x%x)",
+                SDL_GameControllerName(state->controller) ? SDL_GameControllerName(state->controller) : "<null>",
+                type, capabilities);
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+    LiSendControllerArrivalEvent(0, m_GamepadMask, type, buttons, capabilities);
+#else
+    sendGamepadState(state);
+#endif
+    m_Announced = true;
+    m_AnnouncedJsId = state->jsId;
+    m_AnnouncedType = type;
+    m_AnnouncedCaps = capabilities;
+}
+
 void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* event)
 {
     GamepadState* state;
@@ -845,102 +984,28 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
 #if SDL_VERSION_ATLEAST(2, 0, 14)
         // On SDL 2.0.14 and later, we can provide enhanced controller information to the host PC
         // for it to use as a hint for the type of controller to emulate.
-        uint32_t supportedButtonFlags = 0;
-        for (int i = 0; i < (int)SDL_arraysize(k_ButtonMap); i++) {
-            if (SDL_GameControllerHasButton(state->controller, (SDL_GameControllerButton)i)) {
-                supportedButtonFlags |= k_ButtonMap[i];
-            }
-        }
-
-        uint32_t capabilities = 0;
-        if (SDL_GameControllerGetBindForAxis(state->controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT).bindType == SDL_CONTROLLER_BINDTYPE_AXIS ||
-            SDL_GameControllerGetBindForAxis(state->controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT).bindType == SDL_CONTROLLER_BINDTYPE_AXIS) {
-            // We assume these are analog triggers if the binding is to an axis rather than a button
-            capabilities |= LI_CCAP_ANALOG_TRIGGERS;
-        }
-        if (hapticCaps & ML_HAPTIC_GC_RUMBLE) {
-            capabilities |= LI_CCAP_RUMBLE;
-        }
-        if (hapticCaps & ML_HAPTIC_GC_TRIGGER_RUMBLE) {
-            capabilities |= LI_CCAP_TRIGGER_RUMBLE;
-        }
-        if (SDL_GameControllerGetNumTouchpads(state->controller) > 0) {
-            capabilities |= LI_CCAP_TOUCHPAD;
-            if (SDL_GameControllerGetNumTouchpads(state->controller) > 1) {
-                capabilities |= LI_CCAP_DUAL_TOUCHPAD;
-            }
-        }
-        if (SDL_GameControllerHasSensor(state->controller, SDL_SENSOR_ACCEL)) {
-            capabilities |= LI_CCAP_ACCEL;
-        }
-        if (SDL_GameControllerHasSensor(state->controller, SDL_SENSOR_GYRO)) {
-            capabilities |= LI_CCAP_GYRO;
-        }
-        if (powerLevel != SDL_JOYSTICK_POWER_UNKNOWN || SDL_VERSION_ATLEAST(2, 24, 0)) {
-            capabilities |= LI_CCAP_BATTERY_STATE;
-        }
-        if (SDL_GameControllerHasLED(state->controller)) {
-            capabilities |= LI_CCAP_RGB_LED;
-        }
-
         uint8_t type;
-        switch (SDL_GameControllerGetType(state->controller)) {
-        case SDL_CONTROLLER_TYPE_XBOX360:
-        case SDL_CONTROLLER_TYPE_XBOXONE:
-            type = LI_CTYPE_XBOX;
-            break;
-        case SDL_CONTROLLER_TYPE_PS3:
-        case SDL_CONTROLLER_TYPE_PS4:
-        case SDL_CONTROLLER_TYPE_PS5:
-            type = LI_CTYPE_PS;
-            break;
-        case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO:
-#if SDL_VERSION_ATLEAST(2, 24, 0)
-        case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
-        case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
-        case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
-#endif
-            type = LI_CTYPE_NINTENDO;
-            break;
-        default:
-            // These Steam Controller VID/PID combos come from SDL's controller_list.h
-            // TODO: Use SDL_GAMEPAD_TYPE_STEAM on SDL 3.6+
-            if (vendorId == 0x28de) {
-                switch (productId) {
-                case 0x1101:
-                case 0x1102:
-                case 0x1105:
-                case 0x1106:
-                case 0x1142:
-                case 0x1201:
-                case 0x1202:
-                case 0x1205:
-                case 0x1302:
-                case 0x1303:
-                case 0x1304:
-                case 0x1305:
-                    type = LI_CTYPE_STEAM;
-                    break;
-                default:
-                    type = LI_CTYPE_UNKNOWN;
-                    break;
-                }
-            }
-            else {
-                type = LI_CTYPE_UNKNOWN;
-            }
-            break;
-        }
+        uint32_t supportedButtonFlags, capabilities;
+        describeGamepad(state, type, supportedButtonFlags, capabilities);
 
         // If this is a PlayStation controller that doesn't have a touchpad button mapped,
         // we'll allow the Select+PS button combo to act as the touchpad.
         state->clickpadButtonEmulationEnabled =
-#if SDL_VERSION_ATLEAST(2, 0, 14)
             SDL_GameControllerGetBindForButton(state->controller, SDL_CONTROLLER_BUTTON_TOUCHPAD).bindType == SDL_CONTROLLER_BINDTYPE_NONE &&
-#endif
             type == LI_CTYPE_PS;
 
-        LiSendControllerArrivalEvent(state->index, m_GamepadMask, type, supportedButtonFlags, capabilities);
+        if (m_MultiController) {
+            LiSendControllerArrivalEvent(state->index, m_GamepadMask, type, supportedButtonFlags, capabilities);
+        }
+        else if (!m_Announced) {
+            // KaneMode: the first gamepad is the host's player 1 until another one is used
+            announceGamepad(state, false);
+        }
+        else {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Gamepad %d waits for a button press to become the host's player 1",
+                        i);
+        }
 #else
 
         // Send an empty event to tell the PC we've arrived
@@ -978,6 +1043,11 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
             }
             else {
                 SDL_assert(m_GamepadMask == 0x1);
+
+                // The host's player 1 goes to the next gamepad that presses a button
+                if (state->jsId == m_AnnouncedJsId) {
+                    m_AnnouncedJsId = -1;
+                }
             }
 
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,

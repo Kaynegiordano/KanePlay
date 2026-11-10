@@ -11,6 +11,10 @@
 
 SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, int streamHeight)
     : m_MultiController(prefs.multiController),
+      m_AnnouncedJsId(-1),
+      m_AnnouncedType(LI_CTYPE_UNKNOWN),
+      m_AnnouncedCaps(0),
+      m_Announced(false),
       m_GamepadMouse(prefs.gamepadMouse),
       m_SwapMouseButtons(prefs.swapMouseButtons),
       m_ReverseScrollDirection(prefs.reverseScrollDirection),

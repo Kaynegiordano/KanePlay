@@ -200,6 +200,12 @@ private:
 
     void sendGamepadState(GamepadState* state);
 
+    // Type, buttons and capabilities of a local gamepad, as told to the host on arrival
+    void describeGamepad(GamepadState* state, uint8_t& type, uint32_t& buttons, uint32_t& capabilities);
+
+    // Single controller mode: the host's player 1 becomes this gamepad (see m_AnnouncedJsId)
+    void announceGamepad(GamepadState* state, bool replace);
+
     void sendGamepadBatteryState(GamepadState* state, SDL_JoystickPowerLevel level);
 
     void handleAbsoluteFingerEvent(SDL_TouchFingerEvent* event);
@@ -247,6 +253,14 @@ private:
 
     int m_GamepadMask;
     GamepadState m_GamepadState[MAX_GAMEPADS];
+
+    // KaneMode, single controller mode: the local gamepad the host's player 1 was announced for
+    // (its type picks the host's virtual gamepad: Xbox, PlayStation...). Another gamepad that
+    // presses a button takes over, and the host gets a new virtual gamepad of its type.
+    SDL_JoystickID m_AnnouncedJsId;
+    uint8_t m_AnnouncedType;
+    uint32_t m_AnnouncedCaps;
+    bool m_Announced;
     QSet<uint32_t> m_KeysDown;
     bool m_FakeMouseCaptureActive;
     bool m_KeyboardCaptureActive;
