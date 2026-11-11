@@ -22,12 +22,12 @@ struct GamepadState {
     SDL_TimerID mouseEmulationTimer;
     uint32_t lastStartDownTime;
 
-    // Start and Select went down together and nothing else yet: releasing
-    // them opens the in-game menu
-    bool menuComboArmed;
+    // Another button went down while Start was held (Select + Start quits a game
+    // in KaneMode): releasing Start then doesn't toggle mouse emulation
+    bool startChord;
 
-    // Start and Select are held back from the host for a moment, since they
-    // may begin a combo the host must not see (a game pauses on Start).
+    // The buttons of the combos (LB+RB+Select+...) are held back from the host
+    // for a moment, since the host must not see a combo (a game pauses on Start).
     // withheldButtons haven't been sent yet, tapButtons were released before
     // being sent and are sent as a short press.
     int withheldButtons;

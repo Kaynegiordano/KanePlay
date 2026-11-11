@@ -10,14 +10,22 @@
 // How long the Start button must be pressed to toggle mouse emulation
 #define MOUSE_EMULATION_LONG_PRESS_TIME 750
 
-// How long Start or Select alone is held back from the host, waiting for the
-// rest of a combo. Pressing both "together" is usually well within it.
+// How long Select alone is held back from the host, waiting for the rest of a
+// combo. Pressing the buttons "together" is usually well within it.
 #define GAMEPAD_COMBO_WINDOW_MS 100
 
-// Buttons of the disconnect combo (LB+RB+Select+Y). It only disconnects: the
-// host is left as it is, ready to resume. Start isn't part of it, since games
-// and Steam Big Picture react to Start on their own.
-#define QUIT_COMBO_FLAGS (BACK_FLAG | LB_FLAG | RB_FLAG | Y_FLAG)
+// KaneMode: every combo is LB+RB+Select and one more button. Select + Start alone
+// belongs to the game and to KaneMode on the host (held, it quits an emulated game
+// as at home), so it goes straight to the host: it used to open the in-game menu
+// too, and both happened at once.
+#define COMBO_BASE_FLAGS (BACK_FLAG | LB_FLAG | RB_FLAG)
+// End the session and quit the app on the host
+#define QUIT_COMBO_FLAGS (COMBO_BASE_FLAGS | Y_FLAG)
+// In-game menu (resume, stats, mouse, disconnect)
+#define MENU_COMBO_FLAGS (COMBO_BASE_FLAGS | PLAY_FLAG)
+// Performance stats
+#define STATS_COMBO_FLAGS (COMBO_BASE_FLAGS | X_FLAG)
+#define ANY_COMBO_FLAGS (COMBO_BASE_FLAGS | Y_FLAG | PLAY_FLAG | X_FLAG)
 
 // How long between polling the gamepad to send virtual mouse input
 #define MOUSE_EMULATION_POLLING_INTERVAL 50
@@ -78,6 +86,9 @@ void SdlInputHandler::sendGamepadState(GamepadState* state)
         }
     }
 
+    // This gamepad's buttons as sent (clickpad emulation included), for the merge below
+    int ownButtons = buttons;
+
     unsigned char lt = state->lt;
     unsigned char rt = state->rt;
     short lsX = state->lsX;
@@ -89,7 +100,10 @@ void SdlInputHandler::sendGamepadState(GamepadState* state)
     if (!m_MultiController) {
         for (int i = 0; i < MAX_GAMEPADS; i++) {
             if (m_GamepadState[i].index == state->index) {
-                buttons |= m_GamepadState[i].buttons;
+                // Without what is held back: the merge used to put it back, and the host saw
+                // every combo button at once
+                buttons |= &m_GamepadState[i] == state ? ownButtons
+                           : (m_GamepadState[i].buttons | m_GamepadState[i].tapButtons) & ~m_GamepadState[i].withheldButtons;
                 if (lt < m_GamepadState[i].lt) {
                     lt = m_GamepadState[i].lt;
                 }
@@ -337,43 +351,38 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
         else {
             state->buttons &= ~k_ButtonMap[event->button];
         }
-        state->menuComboArmed = false;
         return;
     }
 
     if (event->state == SDL_PRESSED) {
         state->buttons |= k_ButtonMap[event->button];
 
-        // Start and Select together, and only them, arm the in-game menu
-        if (state->buttons == (PLAY_FLAG | BACK_FLAG)) {
-            state->menuComboArmed = true;
-        }
-        else if (state->buttons & ~(PLAY_FLAG | BACK_FLAG)) {
-            state->menuComboArmed = false;
-        }
-
-        // Start and Select may begin the in-game menu, and Select and Y the quit
-        // combo, which the host must not see, so they're held back for a moment.
-        // A button that belongs to neither combo sends them right away.
+        // Select may begin a combo (LB+RB+Select+...), which the host must not see, so
+        // it's held back for a moment; so is the last button of a combo once LB, RB and
+        // Select are down. Any other button sends what was held back right away.
         int flag = k_ButtonMap[event->button];
-        bool menuCandidate = (flag == PLAY_FLAG || flag == BACK_FLAG) &&
-                             (state->buttons & ~(PLAY_FLAG | BACK_FLAG)) == 0;
-        bool quitCandidate = (state->buttons & ~QUIT_COMBO_FLAGS) == 0 &&
-                             (flag == BACK_FLAG ||
-                              (flag == Y_FLAG && ((state->buttons & BACK_FLAG) ||
-                                                  (state->buttons & (LB_FLAG | RB_FLAG)) == (LB_FLAG | RB_FLAG))));
-        if (menuCandidate || quitCandidate) {
+        bool onlyComboButtons = (state->buttons & ~ANY_COMBO_FLAGS) == 0;
+        bool comboCandidate = onlyComboButtons &&
+                              (flag == BACK_FLAG ||
+                               ((flag == Y_FLAG || flag == PLAY_FLAG || flag == X_FLAG) &&
+                                (state->buttons & COMBO_BASE_FLAGS) == COMBO_BASE_FLAGS));
+        if (comboCandidate) {
             state->withheldButtons |= flag;
             startGamepadComboTimer(state, GAMEPAD_COMBO_WINDOW_MS);
         }
-        else if ((state->buttons & ~(PLAY_FLAG | BACK_FLAG)) && (state->buttons & ~QUIT_COMBO_FLAGS)) {
+        else {
             state->withheldButtons = 0;
         }
 
         if (event->button == SDL_CONTROLLER_BUTTON_START) {
             state->lastStartDownTime = SDL_GetTicks();
+            state->startChord = (state->buttons & ~PLAY_FLAG) != 0;
         }
-        else if (state->mouseEmulationTimer != 0) {
+        else if (state->buttons & PLAY_FLAG) {
+            state->startChord = true;
+        }
+
+        if (event->button != SDL_CONTROLLER_BUTTON_START && state->mouseEmulationTimer != 0) {
             if (event->button == SDL_CONTROLLER_BUTTON_A) {
                 LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
             }
@@ -406,31 +415,19 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
     else {
         state->buttons &= ~k_ButtonMap[event->button];
 
-        // Both released after being pressed together: open the in-game menu
-        if (state->menuComboArmed && state->buttons == 0) {
-            state->menuComboArmed = false;
-            state->withheldButtons = 0;
-
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                        "Detected in-game menu gamepad combo");
-
-            // Release everything on the host before the menu takes the gamepad
-            LiSendMultiControllerEvent(state->index, m_GamepadMask,
-                                       0, 0, 0, 0, 0, 0, 0);
-            menu.open();
-            return;
-        }
-
         // Released before the host saw it: send it as a short press
         int flag = k_ButtonMap[event->button];
-        if ((state->withheldButtons & flag) && !state->menuComboArmed) {
+        if (state->withheldButtons & flag) {
             state->withheldButtons &= ~flag;
             state->tapButtons |= flag;
             startGamepadComboTimer(state, GAMEPAD_COMBO_WINDOW_MS);
         }
 
         if (event->button == SDL_CONTROLLER_BUTTON_START) {
-            if (SDL_GetTicks() - state->lastStartDownTime > MOUSE_EMULATION_LONG_PRESS_TIME) {
+            // Start held alone toggles mouse emulation. Not with another button (Select +
+            // Start held to quit a game turned the mouse on as well).
+            if (!state->startChord &&
+                    SDL_GetTicks() - state->lastStartDownTime > MOUSE_EMULATION_LONG_PRESS_TIME) {
                 if (state->mouseEmulationTimer != 0) {
                     SDL_RemoveTimer(state->mouseEmulationTimer);
                     state->mouseEmulationTimer = 0;
@@ -495,8 +492,23 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
         return;
     }
 
+    // Handle LB+RB+Select+Start as the in-game menu combo
+    if (state->buttons == MENU_COMBO_FLAGS) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Detected in-game menu gamepad combo");
+
+        state->withheldButtons = 0;
+        state->tapButtons = 0;
+
+        // Release everything on the host before the menu takes the gamepad
+        LiSendMultiControllerEvent(state->index, m_GamepadMask,
+                                   0, 0, 0, 0, 0, 0, 0);
+        menu.open();
+        return;
+    }
+
     // Handle Select+L1+R1+X as a gamepad overlay combo
-    if (state->buttons == (BACK_FLAG | LB_FLAG | RB_FLAG | X_FLAG)) {
+    if (state->buttons == STATS_COMBO_FLAGS) {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Detected stats toggle gamepad combo");
 
@@ -572,11 +584,11 @@ void SdlInputHandler::handleGamepadComboTimeout(int slot, uint32_t serial)
     bool changed = state->tapButtons != 0;
     state->tapButtons = 0;
 
-    // Still held: sent now, unless a combo is being pressed
-    bool menuCombo = (state->buttons & (PLAY_FLAG | BACK_FLAG)) == (PLAY_FLAG | BACK_FLAG);
-    bool quitCombo = (state->buttons & (LB_FLAG | RB_FLAG)) == (LB_FLAG | RB_FLAG) &&
-                     (state->buttons & ~QUIT_COMBO_FLAGS) == 0;
-    if (state->withheldButtons != 0 && !menuCombo && !quitCombo) {
+    // Still held: sent now, unless a combo is being pressed (LB, RB and Select down,
+    // nothing else than combo buttons)
+    bool comboInProgress = (state->buttons & COMBO_BASE_FLAGS) == COMBO_BASE_FLAGS &&
+                           (state->buttons & ~ANY_COMBO_FLAGS) == 0;
+    if (state->withheldButtons != 0 && !comboInProgress) {
         state->withheldButtons = 0;
         changed = true;
     }

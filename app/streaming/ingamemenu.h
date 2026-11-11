@@ -6,7 +6,7 @@
 
 class Session;
 
-// Menu shown over the game (Start + Select on a gamepad, Ctrl+Alt+Shift+O on a
+// Menu shown over the game (LB+RB+Select+Start on a gamepad, Ctrl+Alt+Shift+O on a
 // keyboard) to change a few things without leaving the stream. While it is open,
 // the gamepad and keyboard drive the menu and nothing reaches the host.
 class InGameMenu

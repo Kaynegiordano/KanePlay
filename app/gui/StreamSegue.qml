@@ -315,7 +315,7 @@ Item {
             // with Session.exec() which requires no concurrent
             // gamepad usage.
             hintText.text = SdlGamepadKeyNavigation.getConnectedGamepads() > 0 ?
-                        qsTr("Start+Select opens the menu, LB+RB+Select+Y disconnects") :
+                        qsTr("LB+RB+Select+Start opens the menu, LB+RB+Select+Y disconnects") :
                         qsTr("Press %1 to end your session").arg(qsTr("Ctrl+Alt+Shift+Q"))
             showHint = true
 

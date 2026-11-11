@@ -2064,8 +2064,8 @@
         <translation>La connexion Internet de ce PC bloque %1. Le streaming par Internet risque de ne pas fonctionner sur ce réseau.</translation>
     </message>
     <message>
-        <source>Start+Select opens the menu, LB+RB+Select+Y disconnects</source>
-        <translation>Start + Select : menu · LB + RB + Select + Y : se déconnecter</translation>
+        <source>LB+RB+Select+Start opens the menu, LB+RB+Select+Y disconnects</source>
+        <translation>LB + RB + Select + Start : menu · LB + RB + Select + Y : se déconnecter</translation>
     </message>
     <message>
         <source>Reconnecting (%1/%2)</source>
