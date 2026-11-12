@@ -1278,7 +1278,8 @@ int main(int argc, char *argv[])
 
     // Give worker tasks time to properly exit. Fixes PendingQuitTask
     // sometimes freezing and blocking process exit.
-    QThreadPool::globalInstance()->waitForDone(30000);
+    // KaneMode: 8 s at most (30 s upstream), the window is already hidden.
+    QThreadPool::globalInstance()->waitForDone(8000);
 
     // Restore the default logger for all libraries before shutting down ours
 #if SDL_VERSION_ATLEAST(3, 0, 0)

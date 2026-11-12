@@ -216,6 +216,18 @@ void KaneModeBridge::returnToKaneMode()
         if (IsIconic(kaneMode)) {
             ShowWindow(kaneMode, SW_RESTORE);
         }
+        // KaneMode takes the screen back itself, now, without waiting for this program to
+        // end (it used to wait behind a black screen when the cleanup was slow)
+        DWORD pid = 0;
+        GetWindowThreadProcessId(kaneMode, &pid);
+        AllowSetForegroundWindow(pid);
+        QString message = QStringLiteral("open\treturn");
+        COPYDATASTRUCT data;
+        data.dwData = 0x4B4D; // "KM"
+        data.cbData = (DWORD)((message.size() + 1) * sizeof(wchar_t));
+        data.lpData = (PVOID)message.utf16();
+        DWORD_PTR result = 0;
+        SendMessageTimeoutW(kaneMode, WM_COPYDATA, 0, (LPARAM)&data, SMTO_ABORTIFHUNG, 1000, &result);
         SetForegroundWindow(kaneMode);
     }
 #endif

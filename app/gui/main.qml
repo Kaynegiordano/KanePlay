@@ -267,8 +267,12 @@ ApplicationWindow {
 
             libraryView = findLibraryView()
 
+            // Not while the game is being closed on the PC (QuitSegue): going back to KaneMode
+            // then quit this program in the middle of the session's cleanup, and KaneMode waited
+            // for it behind a black screen
             if (returnAfterStream && shortcutStreamStarted && currentItem &&
-                    !(currentItem instanceof StreamSegue) && !(currentItem instanceof SessionSummaryView)) {
+                    !(currentItem instanceof StreamSegue) && !(currentItem instanceof SessionSummaryView) &&
+                    !(currentItem instanceof QuitSegue)) {
                 returnAfterStream = false
                 shortcutStreamStarted = false
                 returnToKaneMode()

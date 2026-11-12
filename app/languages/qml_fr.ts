@@ -2036,6 +2036,10 @@
 <context>
     <name>StreamSegue</name>
     <message>
+        <source>Ending the session...</source>
+        <translation>Fin de la session…</translation>
+    </message>
+    <message>
         <source>Resuming %1...</source>
         <translation>Reprise de %1...</translation>
     </message>

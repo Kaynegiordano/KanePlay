@@ -150,6 +150,11 @@ Item {
         // A stream that ran ends on its summary, saved while the session is cleaned up
         if (!quitAfter && !streamSegueErrorDialog.text && streamStartTime !== 0 && hostUuid !== "") {
             pendingSummary = true
+            // Something to read while the session is cleaned up, instead of a black window
+            if (stackView.currentItem === streamSegue) {
+                stageText = qsTr("Ending the session...")
+                content.visible = true
+            }
             window.visible = true
             return
         }
@@ -197,7 +202,8 @@ Item {
             var summary = StreamingPreferences.getLastSession(hostUuid)
             if (summary.endTime !== undefined && Date.now() - summary.endTime.getTime() < 60000) {
                 var component = Qt.createComponent("SessionSummaryView.qml")
-                stackView.replace(streamSegue, component.createObject(stackView, {
+                // The current item: this segue, or the closing screen that replaced it
+                stackView.replace(stackView.currentItem, component.createObject(stackView, {
                                                                           "appName": appName,
                                                                           "hostName": hostName,
                                                                           "hostUuid": hostUuid,
