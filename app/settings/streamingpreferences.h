@@ -27,6 +27,10 @@ public:
     // Share of the configured bitrate that proved sustainable on a given host and
     // network (1.0 when nothing was learned yet). See StreamHealthMonitor.
     static double getLearnedBitrateFactor(const QString& key);
+    static bool hasLearnedBitrateFactor(const QString& key);
+    // KaneMode: lowest share learned for this PC on this network (1.0 when nothing was learned).
+    // An empty network looks at the shares learned before networks were told apart.
+    static double getNetworkBitrateShare(const QString& hostUuid, const QString& networkId);
     static void setLearnedBitrateFactor(const QString& key, double factor);
 
     // Forget the bitrates learned for each host

@@ -524,11 +524,40 @@ double StreamingPreferences::getLearnedBitrateFactor(const QString& key)
     return qBound(0.1, settings.value(key, 1.0).toDouble(), 1.0);
 }
 
+bool StreamingPreferences::hasLearnedBitrateFactor(const QString& key)
+{
+    QSettings settings;
+    settings.beginGroup(SER_LEARNEDBITRATES);
+    return settings.contains(key);
+}
+
+double StreamingPreferences::getNetworkBitrateShare(const QString& hostUuid, const QString& networkId)
+{
+    QSettings settings;
+    settings.beginGroup(SER_LEARNEDBITRATES);
+    settings.beginGroup(hostUuid);
+
+    double share = 1.0;
+    const QStringList keys = settings.childKeys();
+    for (const QString& key : keys) {
+        bool match = networkId.isEmpty() ? !key.contains('@') : key.endsWith("@" + networkId);
+        if (match) {
+            share = qMin(share, qBound(0.1, settings.value(key, 1.0).toDouble(), 1.0));
+        }
+    }
+    return share;
+}
+
 void StreamingPreferences::setLearnedBitrateFactor(const QString& key, double factor)
 {
     QSettings settings;
     settings.beginGroup(SER_LEARNEDBITRATES);
-    if (factor >= 1.0) {
+    if (key.contains('@')) {
+        // KaneMode: a network that carries the whole bitrate is remembered too, so it
+        // isn't taken for an unknown one next time
+        settings.setValue(key, qMin(factor, 1.0));
+    }
+    else if (factor >= 1.0) {
         settings.remove(key);
     }
     else {

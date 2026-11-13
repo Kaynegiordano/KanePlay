@@ -7,6 +7,7 @@
 #include <Limelight.h>
 #include <opus_multistream.h>
 #include "settings/streamingpreferences.h"
+#include "streaming/networkinfo.h"
 #include "input/input.h"
 #include "video/decoder.h"
 #include "audio/renderers/renderer.h"
@@ -353,6 +354,11 @@ private:
     bool m_StreamStarted;
     bool m_Reconnectable;
     bool m_BatterySaverActive;
+    // KaneMode: network this device is on, what it is expected to carry (0: no estimate)
+    // and the picture chosen for it ("" when the picture was left alone)
+    NetworkInfo m_Network;
+    int m_NetworkBudgetKbps;
+    QString m_LoweredMode;
     std::atomic<bool> m_FrameCaptureRequested { false };
     std::atomic<bool> m_FrameInterpolationPaused { false };
     std::atomic<bool> m_FrameInterpolationDuplicateTest { false };

@@ -452,10 +452,13 @@ ApplicationWindow {
         interval: 250
         repeat: true
         onTriggered: {
-            if (tryPendingLaunch() || ++tries > 120) {
+            if (tryPendingLaunch() || ++tries > 360) {
                 stop()
                 tries = 0
                 pendingLaunch = null
+                if (homeView !== null) {
+                    homeView.wakingFor = ""
+                }
             }
         }
     }

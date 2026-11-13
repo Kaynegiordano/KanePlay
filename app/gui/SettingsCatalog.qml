@@ -506,8 +506,8 @@ QtObject {
             },
             {
                 key: "learnBitrate", category: "network", icon: "gauge", type: "bool",
-                label: qsTr("Learn the bitrate of each PC"),
-                desc: qsTr("Lowers it after streams that lost frames"),
+                label: qsTr("Adapt to each network"),
+                desc: qsTr("Learns the bitrate each network carries and lowers the picture on a weak one"),
                 get: function() { return StreamingPreferences.learnBitrate },
                 set: function(value) {
                     StreamingPreferences.learnBitrate = value

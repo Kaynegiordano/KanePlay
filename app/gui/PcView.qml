@@ -168,6 +168,12 @@ FocusScope {
 
     // KaneMode asked for a game of one of our PCs (KaneModeBridge): its library opens
     // and plays or resumes it. False while the PC isn't found, online and paired yet.
+    // KaneMode: game asked from its library while this PC sleeps. The wake-up packet
+    // is sent again every 5 seconds (a network card coming out of sleep can miss one)
+    // and the page says what it is waiting for.
+    property string wakingFor: ""
+    property double lastWakeAt: 0
+
     function openPcLibrary(uuid, appId, appName)
     {
         for (var i = 0; i < pcList.count; i++) {
@@ -175,8 +181,16 @@ FocusScope {
             if (item !== null && item.uuid === uuid) {
                 pcList.currentIndex = i
                 if (!canOpenLibrary) {
+                    if (pc !== null && !pc.statusUnknown && !pc.online && pc.wakeable) {
+                        wakingFor = appName
+                        if (Date.now() - lastWakeAt >= 5000) {
+                            lastWakeAt = Date.now()
+                            computerModel.wakeComputer(i)
+                        }
+                    }
                     return false
                 }
+                wakingFor = ""
                 openLibrary(appId, appName)
                 return true
             }
@@ -730,6 +744,7 @@ FocusScope {
                             id: hintText
                             Layout.fillWidth: true
                             text: pc === null ? "" :
+                                  !pc.online && wakingFor !== "" ? qsTr("Waking up this PC to start %1. It can take a minute.").arg(wakingFor) :
                                   !pc.online ? (pc.wakeable ? qsTr("This PC is asleep or turned off. %1 can wake it up if it is plugged into the network.").arg(appName)
                                                             : qsTr("This PC is offline. Turn it on, then wait for it to show up here.")) :
                                   qsTr("Pair this PC once to play on it: a code to enter in Sunshine will be shown.")

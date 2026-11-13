@@ -1,9 +1,11 @@
 #pragma once
 
 #include "video/decoder.h"
+#include "networkinfo.h"
 
 #include <QFile>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include <atomic>
@@ -34,11 +36,27 @@ public:
     // Remembered with the summary, so the UI can offer to resume this app
     void setApp(const QString& name, int id) { m_AppName = name; m_AppId = id; }
 
+    // KaneMode: what the stream started with, told in the session summary. limits says
+    // why the bitrate is below the wanted one ("learned", "link", "battery", "picture")
+    // and loweredMode the picture chosen for a weak network ("" when left alone).
+    void setNetwork(const NetworkInfo& network, bool remote, int wantedBitrateKbps,
+                    const QStringList& limits, const QString& loweredMode)
+    {
+        m_Network = network;
+        m_Remote = remote;
+        m_WantedBitrateKbps = wantedBitrateKbps;
+        m_BitrateLimits = limits;
+        m_LoweredMode = loweredMode;
+    }
+
     // Share of the configured bitrate used for this session
     double getLearnedFactor() const { return m_LearnedFactor; }
 
 private:
     void openCsv(int width, int height, int fps);
+
+    // KaneMode: what got in the way of the session, most serious first
+    QStringList findIssues(double lossPercent) const;
 
     // Returns the new share of the configured bitrate to use next time
     double updateLearnedBitrate();
@@ -71,5 +89,20 @@ private:
 
     QString m_AppName;
     int m_AppId;
+
+    // KaneMode: for the diagnosis of the session summary
+    const int m_Fps;
+    NetworkInfo m_Network;
+    bool m_Remote;
+    int m_WantedBitrateKbps;
+    QStringList m_BitrateLimits;
+    QString m_LoweredMode;
+    double m_SumReceivedFps;
+    double m_SumDecodeMs;
+    uint64_t m_DecodeWindows;
+    double m_SumHostMs;
+    uint64_t m_HostWindows;
+    uint64_t m_SumRttVarianceMs;
+    uint64_t m_PacerDroppedFrames;
     QFile m_CsvFile;
 };

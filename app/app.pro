@@ -50,7 +50,7 @@ win32 {
     }
 
     INCLUDEPATH += $$PWD/../libs/windows/include
-    LIBS += ws2_32.lib winmm.lib dxva2.lib ole32.lib gdi32.lib user32.lib d3d9.lib dwmapi.lib dbghelp.lib shell32.lib
+    LIBS += ws2_32.lib winmm.lib dxva2.lib ole32.lib gdi32.lib user32.lib d3d9.lib dwmapi.lib dbghelp.lib shell32.lib iphlpapi.lib wlanapi.lib
 }
 macx:!disable-prebuilts {
     !exists($$PWD/../libs/mac) {
@@ -201,6 +201,7 @@ SOURCES += \
     gui/computermodel.cpp \
     gui/appmodel.cpp \
     streaming/bandwidth.cpp \
+    streaming/networkinfo.cpp \
     streaming/streamutils.cpp \
     backend/autoupdatechecker.cpp \
     backend/kanemodebridge.cpp \
@@ -247,6 +248,7 @@ HEADERS += \
     streaming/video/decoder.h \
     streaming/vrrratepolicy.h \
     streaming/bandwidth.h \
+    streaming/networkinfo.h \
     streaming/streamutils.h \
     backend/autoupdatechecker.h \
     backend/kanemodebridge.h \

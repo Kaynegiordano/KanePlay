@@ -829,6 +829,10 @@
         <source>Checking…</source>
         <translation>Vérification…</translation>
     </message>
+    <message>
+        <source>Waking up this PC to start %1. It can take a minute.</source>
+        <translation>Réveil de ce PC pour lancer %1. Cela peut prendre une minute.</translation>
+    </message>
 </context>
 <context>
     <name>PendingPairingTask</name>
@@ -1264,6 +1268,90 @@
         <source>%1 ms</source>
         <translation>%1 ms</translation>
     </message>
+    <message>
+        <source>Smooth session</source>
+        <translation>Session sans accroc</translation>
+    </message>
+    <message>
+        <source>One thing got in the way</source>
+        <translation>Un point a gêné la session</translation>
+    </message>
+    <message>
+        <source>%1 things got in the way</source>
+        <translation>%1 points ont gêné la session</translation>
+    </message>
+    <message>
+        <source>The network, the PC and this device all kept up.</source>
+        <translation>Le réseau, le PC et cette console ont tous suivi.</translation>
+    </message>
+    <message>
+        <source>The network lost frames (%1%).</source>
+        <translation>Le réseau a perdu des images (%1 %).</translation>
+    </message>
+    <message>
+        <source>The Wi-Fi signal was weak (%1%): move closer to the router or switch to the 5 GHz band.</source>
+        <translation>Le signal Wi-Fi était faible (%1 %) : rapprochez-vous de la box ou passez sur la bande 5 GHz.</translation>
+    </message>
+    <message>
+        <source>The next stream from this network starts at %1% of the bitrate.</source>
+        <translation>La prochaine session depuis ce réseau démarrera à %1 % du débit.</translation>
+    </message>
+    <message>
+        <source>Latency was uneven (±%1 ms): something else was probably using the network.</source>
+        <translation>La latence était irrégulière (± %1 ms) : un autre appareil utilisait sans doute le réseau.</translation>
+    </message>
+    <message>
+        <source>Latency was high (%1 ms): the connection between this device and the PC is slow.</source>
+        <translation>La latence était élevée (%1 ms) : la connexion entre cette console et le PC est lente.</translation>
+    </message>
+    <message>
+        <source>Latency was high (%1 ms) for a home network: check the Wi-Fi or use a cable on the PC.</source>
+        <translation>La latence était élevée (%1 ms) pour un réseau domestique : vérifiez le Wi-Fi ou branchez le PC en câble.</translation>
+    </message>
+    <message>
+        <source>The PC took %1 ms to send each frame: its graphics card was overloaded by the game.</source>
+        <translation>Le PC a mis %1 ms à envoyer chaque image : sa carte graphique était saturée par le jeu.</translation>
+    </message>
+    <message>
+        <source>This device took %1 ms to decode each frame: lower the resolution or the frame rate.</source>
+        <translation>Cette console a mis %1 ms à décoder chaque image : baissez la résolution ou le nombre d’images par seconde.</translation>
+    </message>
+    <message>
+        <source>%1% of the frames were skipped when displaying them.</source>
+        <translation>%1 % des images ont été sautées à l’affichage.</translation>
+    </message>
+    <message>
+        <source>The game ran at about %1 FPS on the PC, below the %2 FPS of the stream.</source>
+        <translation>Le jeu tournait à environ %1 i/s sur le PC, sous les %2 i/s du flux.</translation>
+    </message>
+    <message>
+        <source>signal %1%</source>
+        <translation>signal %1 %</translation>
+    </message>
+    <message>
+        <source>learned from earlier sessions</source>
+        <translation>appris des sessions précédentes</translation>
+    </message>
+    <message>
+        <source>Wi-Fi link at %1 Mb/s</source>
+        <translation>lien Wi-Fi à %1 Mb/s</translation>
+    </message>
+    <message>
+        <source>battery saver</source>
+        <translation>économie de batterie</translation>
+    </message>
+    <message>
+        <source>%1 Mb/s</source>
+        <translation>%1 Mb/s</translation>
+    </message>
+    <message>
+        <source>%1 instead of %2 (%3)</source>
+        <translation>%1 au lieu de %2 (%3)</translation>
+    </message>
+    <message>
+        <source>picture lowered to %1 FPS for this network</source>
+        <translation>image réduite à %1 i/s pour ce réseau</translation>
+    </message>
 </context>
 <context>
     <name>SettingSheet</name>
@@ -1570,12 +1658,12 @@
         <translation>Nécessite un débit Wi-Fi séparé · A l’active</translation>
     </message>
     <message>
-        <source>Learn the bitrate of each PC</source>
-        <translation>Apprendre le débit de chaque PC</translation>
+        <source>Adapt to each network</source>
+        <translation>S’adapter à chaque réseau</translation>
     </message>
     <message>
-        <source>Lowers it after streams that lost frames</source>
-        <translation>Le baisse après les sessions qui perdent des images</translation>
+        <source>Learns the bitrate each network carries and lowers the picture on a weak one</source>
+        <translation>Apprend le débit que chaque réseau supporte et réduit l’image sur un réseau faible</translation>
     </message>
     <message>
         <source>Reconnect automatically</source>

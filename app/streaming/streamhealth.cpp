@@ -5,6 +5,9 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 #include <Limelight.h>
 #include <SDL.h>
@@ -32,6 +35,19 @@
 // Never go below this share of the configured bitrate
 #define MIN_LEARNED_FACTOR 0.30
 
+// KaneMode: thresholds of the diagnosis shown after the session
+// Round-trip time that is felt in the controls, and how much it may vary
+#define ISSUE_RTT_MS 60
+#define ISSUE_RTT_VARIANCE_MS 15
+// Time the PC takes to capture and encode a frame when its graphics card is overloaded
+#define ISSUE_HOST_MS 15.0
+// Share of the frame time this device may spend decoding
+#define ISSUE_DECODE_FRAME_SHARE 0.8
+// Share of the frames dropped by the frame pacer
+#define ISSUE_PACER_DROP_PERCENT 3.0
+// Share of the stream frame rate the PC must deliver
+#define ISSUE_HOST_FPS_SHARE 0.85
+
 StreamHealthMonitor::StreamHealthMonitor(const QString& hostUuid, int bitrateKbps, double learnedFactor, const QString& learnedBitrateKey,
                                          bool logStats, int width, int height, int fps)
     : m_HostUuid(hostUuid),
@@ -52,7 +68,17 @@ StreamHealthMonitor::StreamHealthMonitor(const QString& hostUuid, int bitrateKbp
       m_RttSeriesStep(1),
       m_RttSeriesSum(0),
       m_RttSeriesCount(0),
-      m_AppId(0)
+      m_AppId(0),
+      m_Fps(fps),
+      m_Remote(false),
+      m_WantedBitrateKbps(bitrateKbps),
+      m_SumReceivedFps(0),
+      m_SumDecodeMs(0),
+      m_DecodeWindows(0),
+      m_SumHostMs(0),
+      m_HostWindows(0),
+      m_SumRttVarianceMs(0),
+      m_PacerDroppedFrames(0)
 {
     if (logStats) {
         openCsv(width, height, fps);
@@ -134,8 +160,19 @@ void StreamHealthMonitor::onStatsWindow(const VIDEO_STATS& window, int videoForm
 
     m_SumRenderedFps += window.renderedFrames / windowSecs;
     m_SumVideoMbps += videoMbps;
+    m_SumReceivedFps += window.receivedFrames / windowSecs;
+    m_PacerDroppedFrames += window.pacerDroppedFrames;
+    if (window.decodedFrames != 0) {
+        m_SumDecodeMs += window.totalDecodeTimeUs / 1000.0 / window.decodedFrames;
+        m_DecodeWindows++;
+    }
+    if (window.framesWithHostProcessingLatency != 0) {
+        m_SumHostMs += window.totalHostProcessingLatency / 10.0 / window.framesWithHostProcessingLatency;
+        m_HostWindows++;
+    }
     if (rtt != 0) {
         m_SumRttMs += rtt;
+        m_SumRttVarianceMs += rttVariance;
         m_RttWindows++;
 
         m_RttSeriesSum += rtt;
@@ -190,6 +227,42 @@ void StreamHealthMonitor::onStatsWindow(const VIDEO_STATS& window, int videoForm
 // Sessions shorter than this aren't worth showing as the last session
 #define MIN_SUMMARY_WINDOWS 10
 
+QStringList StreamHealthMonitor::findIssues(double lossPercent) const
+{
+    QStringList issues;
+    double lossyWindowRatio = (double)m_LossyWindows / m_Windows;
+    double avgReceivedFps = m_SumReceivedFps / m_Windows;
+    bool loss = lossyWindowRatio >= BACKOFF_LOSSY_WINDOW_RATIO ||
+                lossPercent >= BACKOFF_LOSS_PERCENT ||
+                m_PoorStatusCount >= BACKOFF_POOR_STATUS_COUNT;
+
+    if (loss) {
+        issues.append("loss");
+    }
+    if (m_RttWindows != 0 && (double)m_SumRttVarianceMs / m_RttWindows >= ISSUE_RTT_VARIANCE_MS) {
+        issues.append("jitter");
+    }
+    if (m_RttWindows != 0 && (double)m_SumRttMs / m_RttWindows >= ISSUE_RTT_MS) {
+        issues.append("latency");
+    }
+    if (m_HostWindows != 0 && m_SumHostMs / m_HostWindows >= ISSUE_HOST_MS) {
+        issues.append("host");
+    }
+    if (m_DecodeWindows != 0 && m_Fps > 0 &&
+            m_SumDecodeMs / m_DecodeWindows >= 1000.0 / m_Fps * ISSUE_DECODE_FRAME_SHARE) {
+        issues.append("decode");
+    }
+    if ((double)m_PacerDroppedFrames / m_TotalFrames * 100.0 >= ISSUE_PACER_DROP_PERCENT) {
+        issues.append("pacer");
+    }
+    // The PC sent fewer frames than the stream asked for while the network was fine:
+    // the game itself ran slower. Worth knowing, but not a streaming problem.
+    if (!loss && m_Fps > 0 && avgReceivedFps < m_Fps * ISSUE_HOST_FPS_SHARE) {
+        issues.append("hostfps");
+    }
+    return issues;
+}
+
 void StreamHealthMonitor::finishSession()
 {
     double newFactor = m_LearnedFactor;
@@ -217,6 +290,64 @@ void StreamHealthMonitor::finishSession()
         summary["avgFps"] = m_SumRenderedFps / m_Windows;
         summary["avgMbps"] = m_SumVideoMbps / m_Windows;
         summary["avgRttMs"] = m_RttWindows != 0 ? (double)m_SumRttMs / m_RttWindows : 0.0;
+
+        // KaneMode: the diagnosis in plain words (SessionSummaryView.qml writes the sentences)
+        double lossPercent = (double)m_DroppedFrames / m_TotalFrames * 100.0;
+        const QStringList issues = findIssues(lossPercent);
+        QVariantList issueList, limitList;
+        for (const QString& issue : issues) {
+            issueList.append(issue);
+        }
+        for (const QString& limit : std::as_const(m_BitrateLimits)) {
+            limitList.append(limit);
+        }
+        summary["issues"] = issueList;
+        summary["targetFps"] = m_Fps;
+        summary["avgReceivedFps"] = m_SumReceivedFps / m_Windows;
+        summary["avgRttVarianceMs"] = m_RttWindows != 0 ? (double)m_SumRttVarianceMs / m_RttWindows : 0.0;
+        summary["avgDecodeMs"] = m_DecodeWindows != 0 ? m_SumDecodeMs / m_DecodeWindows : 0.0;
+        summary["avgHostMs"] = m_HostWindows != 0 ? m_SumHostMs / m_HostWindows : 0.0;
+        summary["pacerDropPercent"] = (double)m_PacerDroppedFrames / m_TotalFrames * 100.0;
+        summary["networkName"] = m_Network.name;
+        summary["networkWifi"] = m_Network.wifi;
+        summary["networkSignal"] = m_Network.signalPercent;
+        summary["networkLinkMbps"] = m_Network.linkMbps;
+        summary["remote"] = m_Remote;
+        summary["bitrateKbps"] = m_BitrateKbps;
+        summary["wantedBitrateKbps"] = m_WantedBitrateKbps;
+        summary["bitrateLimits"] = limitList;
+        summary["loweredMode"] = m_LoweredMode;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Session diagnosis: %s",
+                    issues.isEmpty() ? "nothing to report" : qPrintable(issues.join(", ")));
+
+        // KaneMode offers this game again from its home page (host/lib/kaneplay.js)
+        QJsonObject last;
+        last["host"] = m_HostUuid;
+        last["appId"] = m_AppId;
+        last["appName"] = m_AppName;
+        last["endedAt"] = (double)QDateTime::currentMSecsSinceEpoch();
+        last["durationSecs"] = (double)m_Windows;
+        last["issues"] = QJsonArray::fromStringList(issues);
+
+        // The last sessions are kept too: KaneMode counts the play time of each, even
+        // when several games were streamed before going back to it
+        QJsonArray recent;
+        QFile previous(Path::getCacheFileInfo("last-session.json").absoluteFilePath());
+        if (previous.open(QIODevice::ReadOnly)) {
+            recent = QJsonDocument::fromJson(previous.readAll()).object()["recent"].toArray();
+            previous.close();
+        }
+        QJsonObject played;
+        played["host"] = m_HostUuid;
+        played["appId"] = m_AppId;
+        played["endedAt"] = last["endedAt"];
+        played["durationSecs"] = last["durationSecs"];
+        recent.append(played);
+        while (recent.size() > 20) {
+            recent.removeFirst();
+        }
+        last["recent"] = recent;
+        Path::writeCacheFile("last-session.json", QJsonDocument(last).toJson(QJsonDocument::Compact));
 
         QVariantList rttSeries;
         for (int rtt : m_RttSeries) {

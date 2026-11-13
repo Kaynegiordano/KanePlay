@@ -7,6 +7,10 @@
 
 // Frame rate cap of the battery saver
 #define BATTERY_SAVER_MAX_FPS 60
+
+// KaneMode: share of the bitrate used for the first stream from a network this
+// device never streamed from, when the stream crosses the Internet
+#define UNKNOWN_REMOTE_NETWORK_FACTOR 0.6
 #include "backend/richpresencemanager.h"
 #include "backend/kanemodescale.h"
 
@@ -625,6 +629,7 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_StreamStarted(false),
       m_Reconnectable(false),
       m_BatterySaverActive(false),
+      m_NetworkBudgetKbps(0),
       m_InGameMenu(this)
 {
     // KaneMode : variante de l'appli qui règle la mise à l'échelle de l'hôte (backend/kanemodescale.h)
@@ -751,6 +756,60 @@ bool Session::initialize(QQuickWindow* qtWindow)
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                         "Battery saver: on battery (%d%%), streaming at %d FPS",
                         percentLeft, m_StreamConfig.fps);
+        }
+    }
+
+    // KaneMode: adapt to the network this device is on. When it carries far less than
+    // this picture needs, a smaller picture looks better than a starved one. Only what
+    // was left on automatic is touched.
+    m_NetworkBudgetKbps = 0;
+    m_LoweredMode.clear();
+    if (m_Preferences->learnBitrate) {
+        m_Network = NetworkInfo::current();
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Network: %s (%s, link %d Mb/s, signal %d%%, id %s)",
+                    qPrintable(m_Network.name),
+                    m_Network.wifi ? "Wi-Fi" : "cable or unknown",
+                    m_Network.linkMbps, m_Network.signalPercent,
+                    m_Network.id.isEmpty() ? "unknown" : qPrintable(m_Network.id));
+
+        double share = StreamingPreferences::getNetworkBitrateShare(m_Computer->uuid, m_Network.id);
+        int budget = qRound(m_StreamConfig.bitrate * share);
+        if (m_Network.wifi && m_Network.linkMbps > 0) {
+            budget = qMin(budget, qMax(2000, m_Network.linkMbps * 300));
+        }
+
+        auto starved = [&]() {
+            return budget * 100 < StreamingPreferences::getDefaultBitrate(m_StreamConfig.width,
+                                                                          m_StreamConfig.height,
+                                                                          m_StreamConfig.fps,
+                                                                          false) * 40;
+        };
+
+        bool lowered = false;
+        if (starved() && m_Preferences->autoFps && m_StreamConfig.fps > 60) {
+            m_StreamConfig.fps = 60;
+            lowered = true;
+        }
+        if (starved() && m_Preferences->autoResolution && m_StreamConfig.height > 720) {
+            m_StreamConfig.width = qRound(m_StreamConfig.width * 720.0 / m_StreamConfig.height / 2) * 2;
+            m_StreamConfig.height = 720;
+            lowered = true;
+        }
+
+        if (lowered) {
+            m_NetworkBudgetKbps = budget;
+            m_LoweredMode = QString("%1p · %2").arg(m_StreamConfig.height).arg(m_StreamConfig.fps);
+            if (m_Preferences->autoAdjustBitrate) {
+                m_StreamConfig.bitrate = qMin(StreamingPreferences::getDefaultBitrate(m_StreamConfig.width,
+                                                                                      m_StreamConfig.height,
+                                                                                      m_StreamConfig.fps,
+                                                                                      m_Preferences->enableYUV444),
+                                              StreamingPreferences::getMaxBitrate(m_Preferences->unlockBitrate));
+            }
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Network carries about %d kbps (%.0f%% learned): picture lowered to %dx%d at %d FPS",
+                        budget, share * 100, m_StreamConfig.width, m_StreamConfig.height, m_StreamConfig.fps);
         }
     }
 
@@ -2063,17 +2122,63 @@ bool Session::startConnectionAsync()
     // in previous sessions. Local and remote streaming are learned separately.
     QString learnedBitrateKey;
     double learnedFactor = 1.0;
+    QStringList bitrateLimits;
+    const int wantedBitrate = m_StreamConfig.bitrate;
+
+    // Remote: over a VPN, or through the address the PC has on the Internet
+    bool remote = m_StreamConfig.streamingRemotely == STREAM_CFG_REMOTE ||
+                  (activeAddressRoute.reachability != NvComputer::RI_LAN &&
+                   !m_Computer->remoteAddress.isNull() &&
+                   m_Computer->activeAddress == m_Computer->remoteAddress);
+
     if (m_Preferences->learnBitrate) {
-        learnedBitrateKey = m_Computer->uuid + "/" +
-                            (m_StreamConfig.streamingRemotely == STREAM_CFG_REMOTE ? "remote" :
-                             m_StreamConfig.streamingRemotely == STREAM_CFG_LOCAL ? "local" : "auto");
-        learnedFactor = StreamingPreferences::getLearnedBitrateFactor(learnedBitrateKey);
-        if (learnedFactor < 1.0) {
+        // KaneMode: each network this device streams from learns its own share
+        QString hostKey = m_Computer->uuid + "/" +
+                          (m_StreamConfig.streamingRemotely == STREAM_CFG_REMOTE ? "remote" :
+                           m_StreamConfig.streamingRemotely == STREAM_CFG_LOCAL ? "local" : "auto");
+        learnedBitrateKey = m_Network.id.isEmpty() ? hostKey : hostKey + "@" + m_Network.id;
+        if (StreamingPreferences::hasLearnedBitrateFactor(learnedBitrateKey)) {
+            learnedFactor = StreamingPreferences::getLearnedBitrateFactor(learnedBitrateKey);
+        }
+        else {
+            // First stream from this network: start from what the PC had learned, and
+            // carefully when the stream crosses the Internet
+            learnedFactor = StreamingPreferences::getLearnedBitrateFactor(hostKey);
+            if (remote && !m_Network.id.isEmpty()) {
+                learnedFactor = qMin(learnedFactor, UNKNOWN_REMOTE_NETWORK_FACTOR);
+            }
+        }
+
+        if (m_NetworkBudgetKbps > 0) {
+            // The picture was already lowered for what this network carries: the share
+            // learned against the full picture doesn't apply to the smaller one
+            if (m_StreamConfig.bitrate > m_NetworkBudgetKbps) {
+                m_StreamConfig.bitrate = qMax(500, m_NetworkBudgetKbps / 500 * 500);
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Network budget: %d kbps", m_StreamConfig.bitrate);
+            }
+            bitrateLimits.append("picture");
+        }
+        else if (learnedFactor < 1.0) {
             int learnedBitrate = qMax(500, qRound(m_StreamConfig.bitrate * learnedFactor / 500) * 500);
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                         "Learned bitrate: using %.0f%% of %d kbps (%d kbps)",
                         learnedFactor * 100, m_StreamConfig.bitrate, learnedBitrate);
             m_StreamConfig.bitrate = learnedBitrate;
+            bitrateLimits.append("learned");
+        }
+
+        // A Wi-Fi link carries about half of its negotiated speed and shares it with
+        // the rest of the network: stay well below it
+        if (m_Network.wifi && m_Network.linkMbps > 0) {
+            int linkCap = qMax(2000, m_Network.linkMbps * 300 / 500 * 500);
+            if (m_StreamConfig.bitrate > linkCap) {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Wi-Fi link at %d Mb/s: bitrate capped at %d kbps",
+                            m_Network.linkMbps, linkCap);
+                m_StreamConfig.bitrate = linkCap;
+                bitrateLimits.append("link");
+            }
         }
     }
 
@@ -2088,6 +2193,7 @@ bool Session::startConnectionAsync()
                         "Battery saver: bitrate capped at %d kbps",
                         batteryBitrate);
             m_StreamConfig.bitrate = batteryBitrate;
+            bitrateLimits.append("battery");
         }
     }
 
@@ -2103,6 +2209,7 @@ bool Session::startConnectionAsync()
                                                     m_StreamConfig.height,
                                                     m_StreamConfig.fps);
     m_StreamHealthMonitor->setApp(m_App.name, m_App.id);
+    m_StreamHealthMonitor->setNetwork(m_Network, remote, wantedBitrate, bitrateLimits, m_LoweredMode);
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Video bitrate: %d kbps",

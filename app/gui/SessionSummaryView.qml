@@ -59,6 +59,110 @@ FocusScope {
         return bytes < 1000000000 ? qsTr("MB") : qsTr("GB")
     }
 
+    // KaneMode: what got in the way, found by StreamHealthMonitor::findIssues()
+    readonly property var issues: summary.issues !== undefined ? summary.issues : []
+
+    function hasIssue(code) {
+        for (var i = 0; i < issues.length; i++) {
+            if (issues[i] === code) {
+                return true
+            }
+        }
+        return false
+    }
+
+    function decimal(value, digits) {
+        return Number(value).toLocaleString(Qt.locale(), 'f', digits)
+    }
+
+    // A game slower than the stream is worth knowing, but the stream itself was fine
+    readonly property int problemCount: issues.length - (hasIssue("hostfps") ? 1 : 0)
+
+    readonly property string verdictTitle: problemCount === 0 ? qsTr("Smooth session") :
+                                           problemCount === 1 ? qsTr("One thing got in the way") :
+                                                                qsTr("%1 things got in the way").arg(problemCount)
+
+    readonly property color verdictColor: problemCount === 0 ? Theme.success :
+                                          hasIssue("loss") ? Theme.danger : Theme.accent2
+
+    readonly property var diagnosisLines: {
+        var lines = []
+        if (problemCount === 0) {
+            lines.push(qsTr("The network, the PC and this device all kept up."))
+        }
+        if (hasIssue("loss")) {
+            var lost = qsTr("The network lost frames (%1%).").arg(decimal(summary.lossPercent, 1))
+            if (summary.networkWifi && summary.networkSignal >= 0 && summary.networkSignal < 50) {
+                lines.push(lost + " " + qsTr("The Wi-Fi signal was weak (%1%): move closer to the router or switch to the 5 GHz band.").arg(summary.networkSignal))
+            }
+            else if (summary.learnedPercent !== undefined && summary.learnedPercent < 100) {
+                lines.push(lost + " " + qsTr("The next stream from this network starts at %1% of the bitrate.").arg(summary.learnedPercent))
+            }
+            else {
+                lines.push(lost)
+            }
+        }
+        if (hasIssue("jitter")) {
+            lines.push(qsTr("Latency was uneven (±%1 ms): something else was probably using the network.").arg(Math.round(summary.avgRttVarianceMs)))
+        }
+        if (hasIssue("latency")) {
+            lines.push(summary.remote ? qsTr("Latency was high (%1 ms): the connection between this device and the PC is slow.").arg(Math.round(summary.avgRttMs))
+                                      : qsTr("Latency was high (%1 ms) for a home network: check the Wi-Fi or use a cable on the PC.").arg(Math.round(summary.avgRttMs)))
+        }
+        if (hasIssue("host")) {
+            lines.push(qsTr("The PC took %1 ms to send each frame: its graphics card was overloaded by the game.").arg(Math.round(summary.avgHostMs)))
+        }
+        if (hasIssue("decode")) {
+            lines.push(qsTr("This device took %1 ms to decode each frame: lower the resolution or the frame rate.").arg(decimal(summary.avgDecodeMs, 1)))
+        }
+        if (hasIssue("pacer")) {
+            lines.push(qsTr("%1% of the frames were skipped when displaying them.").arg(decimal(summary.pacerDropPercent, 1)))
+        }
+        if (hasIssue("hostfps")) {
+            lines.push(qsTr("The game ran at about %1 FPS on the PC, below the %2 FPS of the stream.").arg(Math.round(summary.avgReceivedFps)).arg(summary.targetFps))
+        }
+        return lines
+    }
+
+    // What the stream started with: network, bitrate and why it was lowered
+    readonly property string networkLine: {
+        if (summary.bitrateKbps === undefined) {
+            return ""
+        }
+        var parts = []
+        if (summary.networkName) {
+            var network = summary.networkName
+            if (summary.networkWifi && summary.networkSignal >= 0) {
+                network += " (" + qsTr("signal %1%").arg(summary.networkSignal) + ")"
+            }
+            parts.push(network)
+        }
+        var limits = summary.bitrateLimits !== undefined ? summary.bitrateLimits : []
+        var reasons = []
+        for (var i = 0; i < limits.length; i++) {
+            if (limits[i] === "learned") {
+                reasons.push(qsTr("learned from earlier sessions"))
+            }
+            else if (limits[i] === "link") {
+                reasons.push(qsTr("Wi-Fi link at %1 Mb/s").arg(summary.networkLinkMbps))
+            }
+            else if (limits[i] === "battery") {
+                reasons.push(qsTr("battery saver"))
+            }
+        }
+        var bitrate = qsTr("%1 Mb/s").arg(decimal(summary.bitrateKbps / 1000, summary.bitrateKbps < 10000 ? 1 : 0))
+        if (reasons.length > 0 && summary.wantedBitrateKbps > summary.bitrateKbps) {
+            bitrate = qsTr("%1 instead of %2 (%3)").arg(bitrate)
+                                                   .arg(Math.round(summary.wantedBitrateKbps / 1000))
+                                                   .arg(reasons.join(", "))
+        }
+        parts.push(bitrate)
+        if (summary.loweredMode) {
+            parts.push(qsTr("picture lowered to %1 FPS for this network").arg(summary.loweredMode))
+        }
+        return parts.join(" · ")
+    }
+
     function playAgain() {
         if (createSession === null) {
             return
@@ -258,6 +362,69 @@ FocusScope {
                 value: summary.dataBytes ? summaryView.dataValue(summary.dataBytes) : "—"
                 unit: summary.dataBytes ? summaryView.dataUnit(summary.dataBytes) : ""
                 note: summary.monthBytes ? qsTr("%1 %2 this month").arg(summaryView.dataValue(summary.monthBytes)).arg(summaryView.dataUnit(summary.monthBytes)) : ""
+            }
+        }
+
+        // KaneMode: the session in plain words
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: diagnosis.implicitHeight + 40
+            radius: 20
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.border
+            visible: summary.issues !== undefined
+
+            ColumnLayout {
+                id: diagnosis
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 20
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                spacing: 6
+
+                RowLayout {
+                    spacing: 10
+
+                    Rectangle {
+                        width: 10
+                        height: 10
+                        radius: 5
+                        color: summaryView.verdictColor
+                    }
+
+                    Text {
+                        text: summaryView.verdictTitle
+                        font.pixelSize: 16
+                        font.weight: Font.Bold
+                        color: Theme.text
+                    }
+                }
+
+                Repeater {
+                    model: summaryView.diagnosisLines
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: modelData
+                        font.pixelSize: 14
+                        lineHeight: 1.3
+                        color: Theme.textSecondary
+                        wrapMode: Text.Wrap
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: text !== ""
+                    text: summaryView.networkLine
+                    font.pixelSize: 13
+                    lineHeight: 1.3
+                    color: Theme.textTertiary
+                    wrapMode: Text.Wrap
+                }
             }
         }
 
