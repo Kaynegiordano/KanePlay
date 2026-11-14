@@ -618,8 +618,10 @@ int main(int argc, char *argv[])
     QDir tempDir(Path::getLogDir());
 
 #ifdef Q_OS_WIN32
-    // Only log to a file if the user didn't redirect stderr somewhere else
-    if (IS_UNSPECIFIED_HANDLE(oldConErr))
+    // Only log to a file if the user didn't redirect stderr somewhere else.
+    // KaneMode: launched by KaneMode, stderr goes to the null device, and KaneMode shows
+    // this log in its settings (System, Log), so always write it.
+    if (IS_UNSPECIFIED_HANDLE(oldConErr) || qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED"))
 #endif
     {
         s_LoggerFile = new QFile(tempDir.filePath(QString("KanePlay-%1.log").arg(QDateTime::currentSecsSinceEpoch())));
