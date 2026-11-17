@@ -175,6 +175,27 @@ void KaneModeBridge::activate()
 #endif
 }
 
+void KaneModeBridge::notify(const QString& message)
+{
+#ifdef Q_OS_WIN32
+    if (!qEnvironmentVariableIsSet("KANEPLAY_EMBEDDED")) {
+        return;
+    }
+    HWND kaneMode = findKaneMode();
+    if (kaneMode == nullptr) {
+        return;
+    }
+    COPYDATASTRUCT data;
+    data.dwData = 0x4B4D; // "KM"
+    data.cbData = (DWORD)((message.size() + 1) * sizeof(wchar_t));
+    data.lpData = (PVOID)message.utf16();
+    DWORD_PTR result = 0;
+    SendMessageTimeoutW(kaneMode, WM_COPYDATA, 0, (LPARAM)&data, SMTO_ABORTIFHUNG, 1000, &result);
+#else
+    Q_UNUSED(message)
+#endif
+}
+
 void KaneModeBridge::openInKaneMode(const QString& panel)
 {
 #ifdef Q_OS_WIN32

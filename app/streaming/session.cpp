@@ -13,6 +13,7 @@
 #define UNKNOWN_REMOTE_NETWORK_FACTOR 0.6
 #include "backend/richpresencemanager.h"
 #include "backend/kanemodescale.h"
+#include "backend/kanemodebridge.h"
 
 #include <Limelight.h>
 #include "SDL_compat.h"
@@ -234,6 +235,9 @@ void Session::clSetHdrMode(bool enabled)
         }
         SDL_UnlockMutex(s_ActiveSession->m_DecoderLock);
     }
+
+    // KaneMode turns Windows HDR on or off with the host (HDR of the streaming: automatic)
+    KaneModeBridge::notify(enabled ? QStringLiteral("hdr\t1") : QStringLiteral("hdr\t0"));
 }
 
 void Session::clRumbleTriggers(uint16_t controllerNumber, uint16_t leftTrigger, uint16_t rightTrigger)
@@ -1498,6 +1502,9 @@ private:
         // Finish cleanup of the connection state
         LiStopConnection();
 
+        // KaneMode gives Windows HDR back (it only undoes what it turned on)
+        KaneModeBridge::notify(QStringLiteral("stream\t0"));
+
         // Nothing can report stats or connection status anymore
         if (m_Session->m_StreamHealthMonitor != nullptr) {
             m_Session->m_StreamHealthMonitor->finishSession();
@@ -2215,12 +2222,16 @@ bool Session::startConnectionAsync()
                 "Video bitrate: %d kbps",
                 m_StreamConfig.bitrate);
 
+    // KaneMode may turn Windows HDR on for the whole session (HDR of the streaming: always)
+    KaneModeBridge::notify(QStringLiteral("stream\t1"));
+
     int err = LiStartConnection(&hostInfo, &m_StreamConfig, &k_ConnCallbacks,
                                 &m_VideoCallbacks, &m_AudioCallbacks,
                                 NULL, 0, NULL, 0);
     if (err != 0) {
         // We already displayed an error dialog in the stage failure
         // listener.
+        KaneModeBridge::notify(QStringLiteral("stream\t0"));
         return false;
     }
 

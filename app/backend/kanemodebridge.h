@@ -37,6 +37,11 @@ public:
     // the foreground back when it is closed
     Q_INVOKABLE void openInKaneMode(const QString& panel);
 
+    // Tells KaneMode about the stream (embedded only, any thread): "stream\t1" / "stream\t0" when a
+    // session starts or ends, "hdr\t1" / "hdr\t0" when the host turns HDR on or off. KaneMode
+    // switches Windows HDR accordingly (Settings → HDR → Streaming).
+    static void notify(const QString& message);
+
     // Box art of every app of our paired PCs, cached as soon as their app list is known: KaneMode
     // shows it on the shortcuts to a PC's games (its library reads the box art cache)
     void prefetchBoxArt(ComputerManager* manager);
