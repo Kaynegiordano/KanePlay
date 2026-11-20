@@ -1913,6 +1913,22 @@ void Session::toggleFullscreen()
     m_InputHandler->updatePointerRegionLock();
 }
 
+void Session::notifyQuitHold(bool held)
+{
+    // The status update overlay again, given back to mouse mode afterwards
+    if (held) {
+        m_OverlayManager.updateOverlayText(Overlay::OverlayStatusUpdate,
+                                           tr("Keep holding for 5 seconds to end the session").toUtf8().constData());
+        m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, true);
+    }
+    else if (m_MouseEmulationRefCount > 0) {
+        m_OverlayManager.updateOverlayText(Overlay::OverlayStatusUpdate, "Gamepad mouse mode active\nLong press Start to deactivate");
+    }
+    else {
+        m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, false);
+    }
+}
+
 void Session::notifyMouseEmulationMode(bool enabled)
 {
     m_MouseEmulationRefCount += enabled ? 1 : -1;

@@ -1161,6 +1161,10 @@
         <source>Unstable connection to the PC</source>
         <translation>Connexion instable avec le PC</translation>
     </message>
+    <message>
+        <source>Keep holding for 5 seconds to end the session</source>
+        <translation>Maintenez 5 secondes pour quitter la session</translation>
+    </message>
 </context>
 <context>
     <name>SessionSummaryView</name>
@@ -2156,8 +2160,8 @@
         <translation>La connexion Internet de ce PC bloque %1. Le streaming par Internet risque de ne pas fonctionner sur ce réseau.</translation>
     </message>
     <message>
-        <source>LB+RB+Select+Start opens the menu, LB+RB+Select+Y disconnects</source>
-        <translation>LB + RB + Select + Start : menu · LB + RB + Select + Y : se déconnecter</translation>
+        <source>LB+RB+Select+Start opens the menu, LB+RB+Select+Y held 5 seconds disconnects</source>
+        <translation>LB + RB + Select + Start : menu · LB + RB + Select + Y maintenus 5 s : se déconnecter</translation>
     </message>
     <message>
         <source>Reconnecting (%1/%2)</source>

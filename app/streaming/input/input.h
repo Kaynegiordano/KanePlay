@@ -35,6 +35,9 @@ struct GamepadState {
     SDL_TimerID comboTimer;
     uint32_t comboTimerSerial;
 
+    // LB+RB+Select+Y ends the session once held for GAMEPAD_QUIT_HOLD_MS (0: not held)
+    uint32_t quitHoldSince;
+
     bool clickpadButtonEmulationEnabled;
     bool emulatedClickpadButtonDown;
 

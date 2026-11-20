@@ -14,6 +14,9 @@
 // combo. Pressing the buttons "together" is usually well within it.
 #define GAMEPAD_COMBO_WINDOW_MS 100
 
+// KaneMode: the quit combo must be held this long, so it can't end a session by accident
+#define GAMEPAD_QUIT_HOLD_MS 5000
+
 // KaneMode: every combo is LB+RB+Select and one more button. Select + Start alone
 // belongs to the game and to KaneMode on the host (held, it quits an emulated game
 // as at home), so it goes straight to the host: it used to open the in-game menu
@@ -467,28 +470,28 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
         }
     }
 
-    // Handle LB+RB+Select+Y as a gamepad disconnect combo
+    // Handle LB+RB+Select+Y, held for GAMEPAD_QUIT_HOLD_MS, as a gamepad disconnect combo
+    if (state->quitHoldSince != 0 && state->buttons != QUIT_COMBO_FLAGS) {
+        // Let go too early: nothing happens, and the host doesn't get the Y
+        state->quitHoldSince = 0;
+        state->tapButtons &= ~Y_FLAG;
+        Session::get()->notifyQuitHold(false);
+    }
     if (state->buttons == QUIT_COMBO_FLAGS && qgetenv("NO_GAMEPAD_QUIT") != "1") {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected quit gamepad button combo");
+        if (state->quitHoldSince == 0) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Quit gamepad button combo held");
 
-        // KaneMode: a clean end on both sides, as with Ctrl+Alt+Shift+Q. The app is quit on the
-        // host, which then runs its undo commands (display, scale, sound) right away, instead of
-        // keeping a session nobody will come back to.
-        Session::get()->setQuitHostApp();
+            state->quitHoldSince = SDL_GetTicks() | 1;
+            Session::get()->notifyQuitHold(true);
 
-        // Push a quit event to the main loop
-        SDL_Event event;
-        event.type = SDL_QUIT;
-        event.quit.timestamp = SDL_GetTicks();
-        SDL_PushEvent(&event);
+            // handleGamepadComboTimeout() ends the session if the combo is still held
+            startGamepadComboTimer(state, GAMEPAD_QUIT_HOLD_MS);
 
-        state->withheldButtons = 0;
-        state->tapButtons = 0;
-
-        // Clear buttons down on this gamepad
-        LiSendMultiControllerEvent(state->index, m_GamepadMask,
-                                   0, 0, 0, 0, 0, 0, 0);
+            // Clear buttons down on this gamepad
+            LiSendMultiControllerEvent(state->index, m_GamepadMask,
+                                       0, 0, 0, 0, 0, 0, 0);
+        }
         return;
     }
 
@@ -580,6 +583,30 @@ void SdlInputHandler::handleGamepadComboTimeout(int slot, uint32_t serial)
         return;
     }
     state->comboTimer = 0;
+
+    // The quit combo was held long enough
+    if (state->quitHoldSince != 0 && state->buttons == QUIT_COMBO_FLAGS &&
+            SDL_GetTicks() - state->quitHoldSince >= GAMEPAD_QUIT_HOLD_MS - 50) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Detected quit gamepad button combo");
+
+        state->quitHoldSince = 0;
+        state->withheldButtons = 0;
+        state->tapButtons = 0;
+        Session::get()->notifyQuitHold(false);
+
+        // KaneMode: a clean end on both sides, as with Ctrl+Alt+Shift+Q. The app is quit on the
+        // host, which then runs its undo commands (display, scale, sound) right away, instead of
+        // keeping a session nobody will come back to.
+        Session::get()->setQuitHostApp();
+
+        // Push a quit event to the main loop
+        SDL_Event event;
+        event.type = SDL_QUIT;
+        event.quit.timestamp = SDL_GetTicks();
+        SDL_PushEvent(&event);
+        return;
+    }
 
     bool changed = state->tapButtons != 0;
     state->tapButtons = 0;

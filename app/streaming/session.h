@@ -215,6 +215,9 @@ private:
 
     void notifyMouseEmulationMode(bool enabled);
 
+    // The quit combo of the gamepad is being held (or was let go)
+    void notifyQuitHold(bool held);
+
     void updateOptimalWindowDisplayMode();
 
     enum class DecoderAvailability {
